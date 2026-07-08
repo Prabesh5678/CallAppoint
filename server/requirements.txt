@@ -1,0 +1,7 @@
+Django>=5.0
+djangorestframework
+psycopg2-binary
+python-decouple
+PyJWT
+cryptography
+django-cors-headers
