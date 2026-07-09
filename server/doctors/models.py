@@ -56,7 +56,8 @@ class Specialty(models.Model):
 
 
 class DoctorSpecialty(models.Model):
-    doctor = models.ForeignKey(DoctorProfile, on_delete=models.CASCADE, db_column='doctor_id')
+    doctor = models.ForeignKey(DoctorProfile, on_delete=models.CASCADE,
+                                db_column='doctor_id', related_name='doctor_specialties')
     specialty = models.ForeignKey(Specialty, on_delete=models.CASCADE, db_column='specialty_id')
 
     class Meta:
