@@ -1,11 +1,15 @@
 import jwt
+from jwt import PyJWKClient
 from django.conf import settings
 from rest_framework.authentication import BaseAuthentication
 from rest_framework.exceptions import AuthenticationFailed
 from .models import User
 
+# Module-level so the JWKS client (and its internal key cache) persists
+# across requests instead of re-fetching on every call.
+_jwks_client = PyJWKClient(settings.SUPABASE_JWKS_URL)
+
 class SupabaseUser:
-    """Wraps the verified JWT + DB profile so request.user behaves consistently."""
     def __init__(self, payload, db_user):
         self.id = payload['sub']
         self.email = payload.get('email')
@@ -20,15 +24,19 @@ class SupabaseJWTAuthentication(BaseAuthentication):
             return None
 
         token = auth_header.split(' ')[1]
+
         try:
+            signing_key = _jwks_client.get_signing_key_from_jwt(token)
             payload = jwt.decode(
                 token,
-                settings.SUPABASE_JWT_SECRET,
-                algorithms=['HS256'],
+                signing_key.key,
+                algorithms=['ES256', 'RS256'],  # Supabase uses ES256 by default; RS256 if you chose that
                 audience='authenticated',
             )
         except jwt.ExpiredSignatureError:
             raise AuthenticationFailed('Token expired')
+        except jwt.PyJWKClientError:
+            raise AuthenticationFailed('Unable to fetch signing key')
         except jwt.InvalidTokenError:
             raise AuthenticationFailed('Invalid token')
 
