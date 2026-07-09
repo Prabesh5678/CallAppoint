@@ -112,3 +112,28 @@ def cancel_appointment(request, pk):
     appt.cancellation_reason = request.data.get('reason', '')
     appt.save()
     return Response(AppointmentSerializer(appt).data)
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def get_video_room(request, pk):
+    """GET /api/appointments/<uuid>/video-room/"""
+    try:
+        appt = Appointment.objects.get(pk=pk)
+    except Appointment.DoesNotExist:
+        raise ValidationError("Appointment not found")
+
+    user = request.user
+    if str(appt.patient_id) != str(user.id) and str(appt.doctor_id) != str(user.id):
+        raise PermissionDenied("Not your appointment")
+
+    if appt.status != 'confirmed':
+        raise ValidationError(f"Video call not available — appointment status is '{appt.status}'")
+
+    if not appt.video_room_id:
+        raise ValidationError("No video room generated for this appointment")
+
+    return Response({
+        'room_name': appt.video_room_id,
+        'jitsi_domain': 'meet.jit.si',
+        'display_name': user.db_user.full_name,
+    })
