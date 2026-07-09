@@ -34,6 +34,12 @@ class CreatePrescriptionView(generics.CreateAPIView):
         self.perform_create(serializer)
         output = PrescriptionSerializer(self.instance)
         return Response(output.data, status=201)
+        notify_user(
+            user_id=prescription.patient_id, type='prescription_ready',
+            title='New prescription available',
+            body=f'Dr. {self.request.user.db_user.full_name} added a new prescription',
+            data={'prescription_id': str(prescription.id)},
+        )
 
 
 class MyPrescriptionsView(generics.ListAPIView):

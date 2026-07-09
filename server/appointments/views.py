@@ -8,6 +8,8 @@ from accounts.permissions import IsPatient, IsDoctor
 from .models import Appointment
 from .serializers import AppointmentSerializer, AppointmentCreateSerializer
 from .services import get_available_slots
+from notifications.services import notify_user
+
 
 
 @api_view(['GET'])
@@ -50,6 +52,13 @@ class BookAppointmentView(generics.CreateAPIView):
         if requested not in slots:
             raise ValidationError("Selected slot is no longer available")
         serializer.save(patient_id=self.request.user.id, status='pending')
+        
+        notify_user(
+            user_id=data['doctor'].id, type='appointment_booked',
+            title='New appointment request',
+            body=f'A patient requested a booking on {data["scheduled_start"].strftime("%b %d, %I:%M %p")}',
+            data={'appointment_id': str(serializer.instance.id)},
+        )
 
 
 @api_view(['POST'])
@@ -72,6 +81,13 @@ def respond_to_appointment(request, pk):
     if action == 'confirm':
         appt.video_room_id = f"callappoint-{appt.id}"
     appt.save()
+    notify_user(
+        user_id=appt.patient_id,
+        type='appointment_confirmed' if action == 'confirm' else 'appointment_cancelled',
+        title='Appointment confirmed' if action == 'confirm' else 'Appointment rejected',
+        body=f'Your appointment on {appt.scheduled_start.strftime("%b %d, %I:%M %p")} was {appt.status}',
+        data={'appointment_id': str(appt.id)},
+    )
     return Response(AppointmentSerializer(appt).data)
 
 
