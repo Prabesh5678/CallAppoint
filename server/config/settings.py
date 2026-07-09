@@ -76,6 +76,7 @@ SUPABASE_JWKS_URL = f"{SUPABASE_URL}/auth/v1/.well-known/jwks.json"
 # dev only — tighten before prod
 CORS_ALLOW_ALL_ORIGINS = DEBUG
 STATIC_URL = 'static/'
+ROOT_URLCONF = 'config.urls'
 
 KHALTI_SECRET_KEY = config('KHALTI_SECRET_KEY')
 KHALTI_BASE_URL = config('KHALTI_BASE_URL', default='https://dev.khalti.com/api/v2/epayment')

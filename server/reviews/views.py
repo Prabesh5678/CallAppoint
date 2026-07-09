@@ -1,7 +1,7 @@
 from django.db import transaction
 from django.db.models import Avg, Count
 from rest_framework import generics
-from rest_framework.permissions import AllowAny
+from rest_framework.permissions import AllowAny ,IsAuthenticated
 from accounts.permissions import IsPatient
 from doctors.models import DoctorProfile
 from .models import Review

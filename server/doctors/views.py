@@ -2,7 +2,6 @@ from rest_framework import viewsets, generics, filters
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.response import Response
 from rest_framework.decorators import action
-from django_filters.rest_framework import DjangoFilterBackend
 from accounts.permissions import IsVerifiedDoctor
 from .models import DoctorProfile, Specialty
 from .serializers import (
