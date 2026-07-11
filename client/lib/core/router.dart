@@ -6,6 +6,7 @@ import '../features/auth/screens/login_screen.dart';
 import '../features/auth/screens/signup_screen.dart';
 import '../features/home/patient_home_screen.dart';
 import '../features/home/doctor_home_screen.dart';
+import '../features/doctors/screens/doctor_detail_screen.dart';
 import 'supabase_client.dart';
 
 final routerProvider = Provider<GoRouter>((ref) {
@@ -30,6 +31,11 @@ final routerProvider = Provider<GoRouter>((ref) {
         builder: (context, state) => const SignupScreen(),
       ),
       GoRoute(path: '/home', builder: (context, state) => const HomeRouter()),
+      GoRoute(
+        path: '/doctor/:id',
+        builder: (context, state) =>
+            DoctorDetailScreen(doctorId: state.pathParameters['id']!),
+      ),
     ],
   );
 });
