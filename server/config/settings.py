@@ -70,7 +70,7 @@ REST_FRAMEWORK = {
     ],
 }
 ASGI_APPLICATION = 'config.asgi.application'
-
+ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='*').split(',')
 CHANNEL_LAYERS = {
     'default': {
         'BACKEND': 'channels.layers.InMemoryChannelLayer',

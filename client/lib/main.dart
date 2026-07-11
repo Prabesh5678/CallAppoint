@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'core/supabase_client.dart';
-import 'features/auth/screens/login_screen.dart';
-import 'features/auth/screens/signup_screen.dart';
+import 'core/theme_provider.dart';
+import 'core/app_theme.dart';
+import 'core/router.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -10,20 +11,20 @@ void main() async {
   runApp(const ProviderScope(child: CallAppointApp()));
 }
 
-class CallAppointApp extends StatelessWidget {
+class CallAppointApp extends ConsumerWidget {
   const CallAppointApp({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    return MaterialApp(
+  Widget build(BuildContext context, WidgetRef ref) {
+    final themeMode = ref.watch(themeModeProvider);
+    final router = ref.watch(routerProvider);
+
+    return MaterialApp.router(
       title: 'CallAppoint',
-      theme: ThemeData(colorSchemeSeed: Colors.teal, useMaterial3: true),
-      initialRoute: '/login',
-      routes: {
-        '/login': (context) => const LoginScreen(),
-        '/signup': (context) => const SignupScreen(),
-        // '/home' comes next once we build role-based routing
-      },
+      theme: AppTheme.light,
+      darkTheme: AppTheme.dark,
+      themeMode: themeMode,
+      routerConfig: router,
     );
   }
 }

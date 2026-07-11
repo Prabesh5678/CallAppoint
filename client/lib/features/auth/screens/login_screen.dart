@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import '../providers/auth_provider.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
@@ -79,7 +80,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 ),
               ),
               TextButton(
-                onPressed: () => Navigator.pushNamed(context, '/signup'),
+                onPressed: () => context.go('/signup'),
                 child: const Text("Don't have an account? Sign up"),
               ),
             ],

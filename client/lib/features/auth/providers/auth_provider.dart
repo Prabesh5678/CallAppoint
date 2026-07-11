@@ -1,14 +1,24 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../core/supabase_client.dart';
+import '../../../core/dio_client.dart';
 
 final authStateProvider = StreamProvider<AuthState>((ref) {
   return supabase.auth.onAuthStateChange;
 });
 
 final currentUserProvider = Provider<User?>((ref) {
-  final authState = ref.watch(authStateProvider).value;
-  return authState?.session?.user ?? supabase.auth.currentUser;
+  ref.watch(authStateProvider);
+  return supabase.auth.currentUser;
+});
+
+final currentUserProfileProvider = FutureProvider<Map<String, dynamic>>((
+  ref,
+) async {
+  final user = ref.watch(currentUserProvider);
+  if (user == null) throw Exception('No active session');
+  final response = await DioClient.instance.get('/accounts/me/');
+  return response.data as Map<String, dynamic>;
 });
 
 class AuthController {
@@ -16,7 +26,7 @@ class AuthController {
     await supabase.auth.signUp(
       email: email,
       password: password,
-      data: {'full_name': fullName}, // read by the handle_new_auth_user trigger
+      data: {'full_name': fullName},
     );
   }
 
