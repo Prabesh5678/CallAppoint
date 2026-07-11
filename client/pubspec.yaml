@@ -22,6 +22,8 @@ dependencies:
   cupertino_icons: ^1.0.8
   web_socket_channel: ^3.0.3
   jitsi_meet_flutter_sdk: ^13.0.0
+  flutter_dotenv: ^6.0.1
+  khalti_checkout_flutter: ^1.0.1
 
 dev_dependencies:
   flutter_test:

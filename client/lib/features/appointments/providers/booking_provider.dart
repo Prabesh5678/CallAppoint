@@ -1,14 +1,14 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../../../core/dio_client.dart';
+import '../../../core/dio_client.dart';
 
 class BookingController {
-  Future<void> book({
+  Future<String> book({
     required String doctorId,
     required DateTime start,
     required DateTime end,
     String? reason,
   }) async {
-    await DioClient.instance.post(
+    final response = await DioClient.instance.post(
       '/appointments/book/',
       data: {
         'doctor': doctorId,
@@ -17,6 +17,8 @@ class BookingController {
         'reason_for_visit': reason ?? '',
       },
     );
+    return response
+        .data['id']; // appointment id, straight from the create response
   }
 }
 

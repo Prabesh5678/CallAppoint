@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+import 'package:khalti_checkout_flutter/khalti_checkout_flutter.dart';
+import '../../payments/providers/payment_provider.dart';
 import '../providers/doctor_detail_provider.dart';
 import '../../appointments/providers/booking_provider.dart';
 
@@ -17,11 +19,11 @@ class _DoctorDetailScreenState extends ConsumerState<DoctorDetailScreen> {
   final _reasonController = TextEditingController();
   bool _booking = false;
 
-  Future<void> _confirmBooking() async {
+Future<void> _confirmBooking() async {
     if (_selectedSlot == null) return;
     setState(() => _booking = true);
     try {
-      await ref
+      final appointmentId = await ref
           .read(bookingControllerProvider)
           .book(
             doctorId: widget.doctorId,
@@ -29,16 +31,84 @@ class _DoctorDetailScreenState extends ConsumerState<DoctorDetailScreen> {
             end: _selectedSlot!.end,
             reason: _reasonController.text.trim(),
           );
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
-              'Appointment requested! Waiting for doctor confirmation.',
-            ),
-          ),
-        );
-        Navigator.pop(context);
-      }
+
+      // initiateData must now include payment_url from your backend
+      final initiateData = await ref
+          .read(paymentControllerProvider)
+          .initiate(appointmentId);
+      final pidx = initiateData['pidx'];
+      final paymentUrl = initiateData['payment_url'];
+
+      final payConfig = KhaltiPayConfig(
+        publicKey: '7a2e21b7eb0d4c348ad814d611c0bd22',
+        pidx: pidx,
+        paymentUrl: paymentUrl,
+        environment: Environment.test,
+      );
+
+      final khalti = await Khalti.init(
+        enableDebugging: true,
+        payConfig: payConfig,
+        onPaymentResult: (paymentResult, khaltiInstance) async {
+          final status = paymentResult.payload?.status;
+          if (status == 'Completed') {
+            try {
+              await ref.read(paymentControllerProvider).verify(pidx);
+              if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Payment successful! Appointment requested.'),
+                  ),
+                );
+                Navigator.pop(context);
+              }
+            } catch (e) {
+              if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text('Payment verification failed: $e'),
+                    backgroundColor: Colors.red,
+                  ),
+                );
+              }
+            }
+          } else {
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text('Payment $status'),
+                  backgroundColor: Colors.red,
+                ),
+              );
+            }
+          }
+          khaltiInstance.close(context);
+        },
+        onMessage:
+            (
+              khaltiInstance, {
+              description,
+              statusCode,
+              event,
+              needsPaymentConfirmation,
+            }) async {
+              if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text('Payment error: $description'),
+                    backgroundColor: Colors.red,
+                  ),
+                );
+              }
+              if (needsPaymentConfirmation == true) {
+                await khaltiInstance.verify();
+              }
+            },
+        onReturn: () {},
+      );
+
+      if (!mounted) return;
+      khalti.open(context);
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -52,7 +122,6 @@ class _DoctorDetailScreenState extends ConsumerState<DoctorDetailScreen> {
       if (mounted) setState(() => _booking = false);
     }
   }
-
   @override
   Widget build(BuildContext context) {
     final doctorAsync = ref.watch(doctorDetailProvider(widget.doctorId));
@@ -245,7 +314,7 @@ class _DoctorDetailScreenState extends ConsumerState<DoctorDetailScreen> {
                             child: CircularProgressIndicator(strokeWidth: 2),
                           )
                         : Text(
-                            'Book for ${DateFormat('MMM d, h:mm a').format(_selectedSlot!.start)}',
+                            'Book & Pay for ${DateFormat('MMM d, h:mm a').format(_selectedSlot!.start)}',
                           ),
                   ),
                 ),

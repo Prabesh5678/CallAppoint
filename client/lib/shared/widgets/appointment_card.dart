@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../../features/appointments/models/appointment.dart';
+import 'package:go_router/go_router.dart';
 
 class AppointmentCard extends StatelessWidget {
   final Appointment appointment;
@@ -98,6 +99,30 @@ class AppointmentCard extends StatelessWidget {
                   appointment.reasonForVisit!,
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
+                ),
+              ],
+              if (appointment.status == 'confirmed') ...[
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        icon: const Icon(Icons.chat_bubble_outline, size: 18),
+                        label: const Text('Chat'),
+                        onPressed: () =>
+                            context.push('/chat/${appointment.id}'),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: ElevatedButton.icon(
+                        icon: const Icon(Icons.videocam, size: 18),
+                        label: const Text('Join Call'),
+                        onPressed: () =>
+                            context.push('/video/${appointment.id}'),
+                      ),
+                    ),
+                  ],
                 ),
               ],
               if (isDoctorView && appointment.status == 'pending') ...[

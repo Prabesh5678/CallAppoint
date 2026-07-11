@@ -7,6 +7,8 @@ import '../features/auth/screens/signup_screen.dart';
 import '../features/home/patient_home_screen.dart';
 import '../features/home/doctor_home_screen.dart';
 import '../features/doctors/screens/doctor_detail_screen.dart';
+import '../features/chat/screens/chat_screen.dart';
+import '../features/video/screens/video_call_screen.dart';
 import 'supabase_client.dart';
 
 final routerProvider = Provider<GoRouter>((ref) {
@@ -35,6 +37,14 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: '/doctor/:id',
         builder: (context, state) =>
             DoctorDetailScreen(doctorId: state.pathParameters['id']!),
+      ),
+      GoRoute(
+        path: '/chat/:appointmentId',
+        builder: (context, state) => ChatScreen(appointmentId: state.pathParameters['appointmentId']!),
+      ),
+      GoRoute(
+        path: '/video/:appointmentId',
+        builder: (context, state) => VideoCallScreen(appointmentId: state.pathParameters['appointmentId']!),
       ),
     ],
   );

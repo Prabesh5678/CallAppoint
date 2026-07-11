@@ -9,8 +9,13 @@ from .models import Appointment
 from .serializers import AppointmentSerializer, AppointmentCreateSerializer
 from .services import get_available_slots
 from notifications.services import notify_user
+from django.utils import timezone as dj_timezone
 
 
+def _ensure_aware(dt):
+    if dj_timezone.is_naive(dt):
+        return dj_timezone.make_aware(dt)
+    return dt
 
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
@@ -38,7 +43,6 @@ class MyAppointmentsView(generics.ListAPIView):
             return Appointment.objects.filter(doctor_id=user.id).order_by('-scheduled_start')
         return Appointment.objects.none()
 
-
 class BookAppointmentView(generics.CreateAPIView):
     """POST /api/appointments/book/ — patients only."""
     serializer_class = AppointmentCreateSerializer
@@ -46,15 +50,20 @@ class BookAppointmentView(generics.CreateAPIView):
 
     def perform_create(self, serializer):
         data = serializer.validated_data
-        # re-validate slot is actually free at write time (race condition guard)
-        slots = get_available_slots(data['doctor'].id, data['scheduled_start'].date())
-        requested = (data['scheduled_start'], data['scheduled_end'])
-        if requested not in slots:
+        slots = get_available_slots(data['doctor'].pk, data['scheduled_start'].date())
+
+        requested_start = _ensure_aware(data['scheduled_start'])
+        requested_end = _ensure_aware(data['scheduled_end'])
+
+        slot_matches = any(s == requested_start and e == requested_end for s, e in slots)
+        if not slot_matches:
             raise ValidationError("Selected slot is no longer available")
+
         serializer.save(patient_id=self.request.user.id, status='pending')
-        
+
         notify_user(
-            user_id=data['doctor'].id, type='appointment_booked',
+            user_id=data['doctor'].id_id,  # ← .id_id, not .id — see previous fix
+            type='appointment_booked',
             title='New appointment request',
             body=f'A patient requested a booking on {data["scheduled_start"].strftime("%b %d, %I:%M %p")}',
             data={'appointment_id': str(serializer.instance.id)},
