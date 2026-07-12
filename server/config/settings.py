@@ -1,9 +1,12 @@
+import os
 from decouple import config
 
 SECRET_KEY = config('DJANGO_SECRET_KEY')
 DEBUG = config('DEBUG', default=False, cast=bool)
 TIME_ZONE = 'Asia/Kathmandu'
 USE_TZ = True
+ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='').split(',')
+DEBUG = config('DEBUG', default=False, cast=bool)
 
 INSTALLED_APPS = [
     'daphne',
@@ -44,6 +47,7 @@ TEMPLATES = [
 MIDDLEWARE = [
     'corsheaders.middleware.CorsMiddleware',
     'django.middleware.security.SecurityMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -78,12 +82,14 @@ CHANNEL_LAYERS = {
         'BACKEND': 'channels.layers.InMemoryChannelLayer',
     },
 }
+STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
+STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 SUPABASE_URL = config('SUPABASE_URL')
 SUPABASE_ANON_KEY = config('SUPABASE_ANON_KEY')
 SUPABASE_SERVICE_ROLE_KEY = config('SUPABASE_SERVICE_ROLE_KEY')
 SUPABASE_JWKS_URL = f"{SUPABASE_URL}/auth/v1/.well-known/jwks.json"
 # dev only — tighten before prod
-CORS_ALLOW_ALL_ORIGINS = DEBUG
+CORS_ALLOW_ALL_ORIGINS = False
 STATIC_URL = 'static/'
 ROOT_URLCONF = 'config.urls'
 
