@@ -6,7 +6,6 @@ import '../../shared/widgets/appointment_card.dart';
 import '../appointments/providers/appointment_provider.dart';
 import '../appointments/models/appointment.dart';
 import '../doctors/screens/availability_screen_body.dart';
-import 'package:go_router/go_router.dart';
 
 class DoctorHomeScreen extends ConsumerStatefulWidget {
   const DoctorHomeScreen({super.key});
