@@ -57,3 +57,14 @@ class DoctorProfileUpdateSerializer(serializers.ModelSerializer):
     class Meta:
         model = DoctorProfile
         fields = ['bio', 'years_experience', 'consultation_fee']
+
+class DoctorApplicationSerializer(serializers.ModelSerializer):
+    specialty_ids = serializers.ListField(child=serializers.UUIDField(), write_only=True, required=False)
+
+    class Meta:
+        model = DoctorProfile
+        fields = ['license_number', 'bio', 'years_experience', 'consultation_fee', 'specialty_ids']
+class DoctorApplicationStatusSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = DoctorProfile
+        fields = ['verification_status', 'rejection_reason']        

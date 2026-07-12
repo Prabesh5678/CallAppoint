@@ -1,12 +1,16 @@
 from rest_framework import viewsets, generics, filters
+from rest_framework.exceptions import ValidationError
+from django.db import transaction
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.response import Response
-from rest_framework.decorators import action
+from rest_framework.decorators import action, api_view, permission_classes
 from accounts.permissions import IsVerifiedDoctor
-from .models import DoctorProfile, Specialty
+from .models import DoctorProfile, Specialty, DoctorSpecialty
+
 from .serializers import (
     DoctorListSerializer, DoctorDetailSerializer,
-    DoctorProfileUpdateSerializer, SpecialtySerializer,
+    DoctorProfileUpdateSerializer, SpecialtySerializer,DoctorApplicationSerializer,
+    DoctorApplicationStatusSerializer
 )
 
 
@@ -66,3 +70,56 @@ class MyDoctorProfileView(generics.RetrieveUpdateAPIView):
 
     def get_object(self):
         return DoctorProfile.objects.get(id=self.request.user.id)
+
+class ApplyForDoctorView(generics.CreateAPIView):
+    serializer_class = DoctorApplicationSerializer
+    permission_classes = [IsAuthenticated]
+
+    @transaction.atomic
+    def perform_create(self, serializer):
+        user = self.request.user
+        existing = DoctorProfile.objects.filter(id=user.id).first()
+
+        if existing and existing.verification_status != 'rejected':
+            raise ValidationError("You've already applied")
+
+        specialty_ids = serializer.validated_data.pop('specialty_ids', [])
+
+        if existing:
+            existing.license_number = serializer.validated_data['license_number']
+            existing.bio = serializer.validated_data.get('bio', '')
+            existing.years_experience = serializer.validated_data.get('years_experience', 0)
+            existing.consultation_fee = serializer.validated_data.get('consultation_fee', 0)
+            existing.verification_status = 'pending'
+            existing.rejection_reason = None
+            existing.save()
+            profile = existing
+            DoctorSpecialty.objects.filter(doctor=profile).delete()
+        else:
+            profile = DoctorProfile.objects.create(
+                id_id=user.id,
+                license_number=serializer.validated_data['license_number'],
+                bio=serializer.validated_data.get('bio', ''),
+                years_experience=serializer.validated_data.get('years_experience', 0),
+                consultation_fee=serializer.validated_data.get('consultation_fee', 0),
+                verification_status='pending',
+            )
+
+        for spec_id in specialty_ids:
+            DoctorSpecialty.objects.create(doctor=profile, specialty_id=spec_id)
+        self.instance = profile
+
+    def create(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        self.perform_create(serializer)
+        return Response({'detail': 'Application submitted. Awaiting admin review.'}, status=201)      
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def application_status(request):
+    """GET /api/doctors/application-status/ — null if never applied."""
+    profile = DoctorProfile.objects.filter(id=request.user.id).first()
+    if not profile:
+        return Response(None)
+    return Response(DoctorApplicationStatusSerializer(profile).data)        

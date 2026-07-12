@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import '../../shared/widgets/theme_toggle_button.dart';
 import '../../shared/widgets/logout_button.dart';
 import '../../shared/widgets/doctor_card.dart';
 import '../../shared/widgets/appointment_card.dart';
 import '../doctors/providers/doctor_provider.dart';
 import '../appointments/providers/appointment_provider.dart';
-import 'package:go_router/go_router.dart';
 
 class PatientHomeScreen extends ConsumerStatefulWidget {
   const PatientHomeScreen({super.key});
@@ -62,7 +62,15 @@ class _FindDoctorsTabState extends ConsumerState<_FindDoctorsTab> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Find a Doctor'),
-        actions: const [ThemeToggleButton(), LogoutButton()],
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.medical_services_outlined),
+            tooltip: 'Become a Doctor',
+            onPressed: () => context.push('/apply-doctor'),
+          ),
+          const ThemeToggleButton(),
+          const LogoutButton(),
+        ],
       ),
       body: RefreshIndicator(
         onRefresh: () async {

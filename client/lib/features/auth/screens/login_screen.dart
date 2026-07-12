@@ -24,7 +24,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       await ref
           .read(authControllerProvider)
           .signIn(_emailController.text.trim(), _passwordController.text);
-      // router redirect handles navigation once auth state changes
+      ref.invalidate(currentUserProfileProvider); // force a fresh /me/ fetch
     } catch (e) {
       setState(() => _error = e.toString());
     } finally {
