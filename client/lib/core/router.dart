@@ -61,11 +61,24 @@ class GoRouterRefreshStream extends ChangeNotifier {
   }
 }
 
-class HomeRouter extends ConsumerWidget {
+class HomeRouter extends ConsumerStatefulWidget {
   const HomeRouter({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<HomeRouter> createState() => _HomeRouterState();
+}
+
+class _HomeRouterState extends ConsumerState<HomeRouter> {
+  @override
+  void initState() {
+    super.initState();
+    // force a fresh /me/ fetch every time this screen is entered,
+    // rather than relying on Riverpod's equality check on the auth stream
+    Future.microtask(() => ref.invalidate(currentUserProfileProvider));
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final meAsync = ref.watch(currentUserProfileProvider);
     return meAsync.when(
       loading: () =>

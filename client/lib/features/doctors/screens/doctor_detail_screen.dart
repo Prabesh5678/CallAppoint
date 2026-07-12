@@ -14,30 +14,100 @@ class DoctorDetailScreen extends ConsumerStatefulWidget {
   ConsumerState<DoctorDetailScreen> createState() => _DoctorDetailScreenState();
 }
 
-class _DoctorDetailScreenState extends ConsumerState<DoctorDetailScreen> {
+class _DoctorDetailScreenState extends ConsumerState<DoctorDetailScreen>
+    with WidgetsBindingObserver {
   Slot? _selectedSlot;
   final _reasonController = TextEditingController();
   bool _booking = false;
+  String? _pendingPidx;
+  bool _checkingPending = false;
 
-Future<void> _confirmBooking() async {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _reasonController.dispose();
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed && _pendingPidx != null) {
+      _checkPendingPayment();
+    }
+  }
+
+  Future<void> _checkPendingPayment() async {
+    final pidx = _pendingPidx;
+    if (pidx == null || _checkingPending) return;
+    setState(() => _checkingPending = true);
+    try {
+      final result = await ref.read(paymentControllerProvider).verify(pidx);
+      if (result['status'] == 'success') {
+        _pendingPidx = null;
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Payment successful! Appointment confirmed.'),
+            ),
+          );
+          Navigator.pop(context);
+        }
+      } else if (result['status'] == 'failed') {
+        _pendingPidx = null;
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Payment was not completed.'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                'Payment not confirmed yet. Try again in a moment.',
+              ),
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Could not check payment: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _checkingPending = false);
+    }
+  }
+
+  Future<void> _confirmBooking() async {
     if (_selectedSlot == null) return;
     setState(() => _booking = true);
     try {
-      final appointmentId = await ref
-          .read(bookingControllerProvider)
-          .book(
+      final initiateData = await ref
+          .read(paymentControllerProvider)
+          .initiate(
             doctorId: widget.doctorId,
             start: _selectedSlot!.start,
             end: _selectedSlot!.end,
             reason: _reasonController.text.trim(),
           );
-
-      // initiateData must now include payment_url from your backend
-      final initiateData = await ref
-          .read(paymentControllerProvider)
-          .initiate(appointmentId);
       final pidx = initiateData['pidx'];
       final paymentUrl = initiateData['payment_url'];
+      _pendingPidx = pidx;
 
       final payConfig = KhaltiPayConfig(
         publicKey: '7a2e21b7eb0d4c348ad814d611c0bd22',
@@ -49,62 +119,66 @@ Future<void> _confirmBooking() async {
       final khalti = await Khalti.init(
         enableDebugging: true,
         payConfig: payConfig,
-        onPaymentResult: (paymentResult, khaltiInstance) async {
-          final status = paymentResult.payload?.status;
-          if (status == 'Completed') {
-            try {
-              await ref.read(paymentControllerProvider).verify(pidx);
-              if (mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Payment successful! Appointment requested.'),
-                  ),
-                );
-                Navigator.pop(context);
-              }
-            } catch (e) {
-              if (mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text('Payment verification failed: $e'),
-                    backgroundColor: Colors.red,
-                  ),
-                );
-              }
+        onPaymentResult: (paymentResult, khalti) async {
+          khalti.close(context);
+          _pendingPidx = null;
+          try {
+            await ref.read(paymentControllerProvider).verify(pidx);
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Payment successful! Appointment confirmed.'),
+                ),
+              );
+              Navigator.pop(context);
             }
-          } else {
+          } catch (e) {
             if (mounted) {
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
-                  content: Text('Payment $status'),
+                  content: Text('Payment verification failed: $e'),
                   backgroundColor: Colors.red,
                 ),
               );
             }
           }
-          khaltiInstance.close(context);
         },
         onMessage:
             (
-              khaltiInstance, {
+              khalti, {
               description,
               statusCode,
               event,
               needsPaymentConfirmation,
             }) async {
-              if (mounted) {
+              if (needsPaymentConfirmation == true) {
+                await khalti.verify();
+                return;
+              }
+              khalti.close(context);
+              if (!mounted) return;
+
+              if (event == KhaltiEvent.kpgDisposed) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text(
+                      'Checkout closed. Checking payment status...',
+                    ),
+                  ),
+                );
+                _checkPendingPayment();
+              } else {
+                _pendingPidx = null;
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
-                    content: Text('Payment error: $description'),
+                    content: Text(
+                      'Payment failed: ${description ?? 'Unknown error'}',
+                    ),
                     backgroundColor: Colors.red,
                   ),
                 );
               }
-              if (needsPaymentConfirmation == true) {
-                await khaltiInstance.verify();
-              }
             },
-        onReturn: () {},
       );
 
       if (!mounted) return;
@@ -122,6 +196,7 @@ Future<void> _confirmBooking() async {
       if (mounted) setState(() => _booking = false);
     }
   }
+
   @override
   Widget build(BuildContext context) {
     final doctorAsync = ref.watch(doctorDetailProvider(widget.doctorId));
@@ -280,7 +355,18 @@ Future<void> _confirmBooking() async {
                       return ChoiceChip(
                         label: Text(DateFormat('h:mm a').format(slot.start)),
                         selected: isSelected,
-                        onSelected: (_) => setState(() => _selectedSlot = slot),
+                        onSelected: slot.isAvailable
+                            ? (_) => setState(() => _selectedSlot = slot)
+                            : null,
+                        backgroundColor: slot.isAvailable
+                            ? null
+                            : Colors.grey.withOpacity(0.15),
+                        labelStyle: TextStyle(
+                          color: slot.isAvailable ? null : Colors.grey,
+                          decoration: slot.isAvailable
+                              ? null
+                              : TextDecoration.lineThrough,
+                        ),
                       );
                     }).toList(),
                   );
@@ -316,6 +402,24 @@ Future<void> _confirmBooking() async {
                         : Text(
                             'Book & Pay for ${DateFormat('MMM d, h:mm a').format(_selectedSlot!.start)}',
                           ),
+                  ),
+                ),
+              ],
+
+              if (_pendingPidx != null) ...[
+                const SizedBox(height: 12),
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    onPressed: _checkingPending ? null : _checkPendingPayment,
+                    icon: _checkingPending
+                        ? const SizedBox(
+                            height: 16,
+                            width: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.refresh),
+                    label: const Text('Check Payment Status'),
                   ),
                 ),
               ],

@@ -1,8 +1,13 @@
 from django.contrib import admin
 from django.urls import path, include
+from django.http import HttpResponse
+
+def payment_callback(request):
+    return HttpResponse("Payment processed. You can close this window.")
 
 urlpatterns = [
     path('admin/', admin.site.urls),
+    path('payment-callback', payment_callback, name='payment-callback'),
     path('api/accounts/', include('accounts.urls')),
     path('api/doctors/', include('doctors.urls')),
     path('api/appointments/', include('appointments.urls')),
@@ -11,4 +16,5 @@ urlpatterns = [
     path('api/reviews/', include('reviews.urls')),
     path('api/notifications/', include('notifications.urls')),
     path('api/chat/', include('chat.urls')),
+    path('api/payments/', include('payments.urls')),
 ]

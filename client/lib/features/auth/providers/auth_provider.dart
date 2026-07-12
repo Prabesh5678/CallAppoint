@@ -12,14 +12,13 @@ final currentUserProvider = Provider<User?>((ref) {
   return supabase.auth.currentUser;
 });
 
-final currentUserProfileProvider = FutureProvider<Map<String, dynamic>>((
-  ref,
-) async {
-  final user = ref.watch(currentUserProvider);
-  if (user == null) throw Exception('No active session');
-  final response = await DioClient.instance.get('/accounts/me/');
-  return response.data as Map<String, dynamic>;
-});
+final currentUserProfileProvider =
+    FutureProvider.autoDispose<Map<String, dynamic>>((ref) async {
+      final user = ref.watch(currentUserProvider);
+      if (user == null) throw Exception('No active session');
+      final response = await DioClient.instance.get('/accounts/me/');
+      return response.data as Map<String, dynamic>;
+    });
 
 class AuthController {
   Future<void> signUp(String email, String password, String fullName) async {

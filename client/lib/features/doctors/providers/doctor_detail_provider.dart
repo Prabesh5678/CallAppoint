@@ -13,12 +13,14 @@ final doctorDetailProvider = FutureProvider.autoDispose.family<Doctor, String>((
 class Slot {
   final DateTime start;
   final DateTime end;
-  Slot({required this.start, required this.end});
+  final bool isAvailable;
+  Slot({required this.start, required this.end, required this.isAvailable});
 
   factory Slot.fromJson(Map<String, dynamic> json) {
     return Slot(
       start: DateTime.parse(json['start']),
       end: DateTime.parse(json['end']),
+      isAvailable: json['is_available'] ?? true,
     );
   }
 }

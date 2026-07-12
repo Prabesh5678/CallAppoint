@@ -55,9 +55,9 @@ def get_available_slots(doctor_id, date):
 
     booked_ranges = [(a.scheduled_start, a.scheduled_end) for a in existing]
 
-    free_slots = [
-        (s, e) for s, e in candidate_slots
-        if not any(s < be and e > bs for bs, be in booked_ranges)
-    ]
+    all_slots = []
+    for s, e in candidate_slots:
+        is_booked = any(s < be and e > bs for bs, be in booked_ranges)
+        all_slots.append({'start': s, 'end': e, 'is_available': not is_booked})
 
-    return free_slots
+    return all_slots

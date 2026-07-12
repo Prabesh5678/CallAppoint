@@ -5,12 +5,12 @@ from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.response import Response
 from rest_framework.decorators import action, api_view, permission_classes
 from accounts.permissions import IsVerifiedDoctor
-from .models import DoctorProfile, Specialty, DoctorSpecialty
+from .models import DoctorProfile, Specialty, DoctorSpecialty, DoctorAvailability
 
 from .serializers import (
     DoctorListSerializer, DoctorDetailSerializer,
     DoctorProfileUpdateSerializer, SpecialtySerializer,DoctorApplicationSerializer,
-    DoctorApplicationStatusSerializer
+    DoctorApplicationStatusSerializer, DoctorAvailabilityCreateSerializer
 )
 
 
@@ -113,7 +113,30 @@ class ApplyForDoctorView(generics.CreateAPIView):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         self.perform_create(serializer)
-        return Response({'detail': 'Application submitted. Awaiting admin review.'}, status=201)      
+        return Response({'detail': 'Application submitted. Awaiting admin review.'}, status=201)         
+
+class MyAvailabilityView(generics.ListCreateAPIView):
+    """
+    GET  /api/doctors/me/availability/  — list current doctor's weekly schedule
+    POST /api/doctors/me/availability/  — add a new weekly slot
+    """
+    serializer_class = DoctorAvailabilityCreateSerializer
+    permission_classes = [IsAuthenticated, IsVerifiedDoctor]
+
+    def get_queryset(self):
+        return DoctorAvailability.objects.filter(doctor_id=self.request.user.id).order_by('day_of_week', 'start_time')
+
+    def perform_create(self, serializer):
+        serializer.save(doctor_id=self.request.user.id)
+
+
+class DeleteAvailabilityView(generics.DestroyAPIView):
+    """DELETE /api/doctors/me/availability/<uuid:pk>/"""
+    permission_classes = [IsAuthenticated, IsVerifiedDoctor]
+    queryset = DoctorAvailability.objects.all()
+
+    def get_queryset(self):
+        return DoctorAvailability.objects.filter(doctor_id=self.request.user.id)
 
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
@@ -122,4 +145,6 @@ def application_status(request):
     profile = DoctorProfile.objects.filter(id=request.user.id).first()
     if not profile:
         return Response(None)
-    return Response(DoctorApplicationStatusSerializer(profile).data)        
+    return Response(DoctorApplicationStatusSerializer(profile).data) 
+
+

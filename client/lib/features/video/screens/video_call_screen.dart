@@ -38,11 +38,14 @@ class _VideoCallScreenState extends ConsumerState<VideoCallScreen> {
           'startWithLobbyDisabled': true,
           'prejoinConfig.enabled': false,
           'requireDisplayName': false,
+          'enableLobbyChat': false,
+          'hideLobbyButton': true,
         },
         featureFlags: {
           'welcomepage.enabled': false,
           'invite.enabled': false,
           'lobby-mode.enabled': false,
+          'security-options.enabled': false,
         },
       );
 

@@ -64,7 +64,14 @@ class DoctorApplicationSerializer(serializers.ModelSerializer):
     class Meta:
         model = DoctorProfile
         fields = ['license_number', 'bio', 'years_experience', 'consultation_fee', 'specialty_ids']
+        
 class DoctorApplicationStatusSerializer(serializers.ModelSerializer):
     class Meta:
         model = DoctorProfile
-        fields = ['verification_status', 'rejection_reason']        
+        fields = ['verification_status', 'rejection_reason']   
+
+class DoctorAvailabilityCreateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = DoctorAvailability
+        fields = ['id', 'day_of_week', 'start_time', 'end_time', 'slot_duration_minutes', 'is_active']
+        read_only_fields = ['id']             

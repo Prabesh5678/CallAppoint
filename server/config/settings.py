@@ -2,6 +2,8 @@ from decouple import config
 
 SECRET_KEY = config('DJANGO_SECRET_KEY')
 DEBUG = config('DEBUG', default=False, cast=bool)
+TIME_ZONE = 'Asia/Kathmandu'
+USE_TZ = True
 
 INSTALLED_APPS = [
     'daphne',

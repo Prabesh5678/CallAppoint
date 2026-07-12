@@ -26,7 +26,8 @@ def available_slots(request, doctor_id):
     date = datetime.strptime(date_str, '%Y-%m-%d').date()
     slots = get_available_slots(doctor_id, date)
     return Response([
-        {'start': s.isoformat(), 'end': e.isoformat()} for s, e in slots
+        {'start': s['start'].isoformat(), 'end': s['end'].isoformat(), 'is_available': s['is_available']}
+        for s in slots
     ])
 
 
@@ -44,7 +45,6 @@ class MyAppointmentsView(generics.ListAPIView):
         return Appointment.objects.none()
 
 class BookAppointmentView(generics.CreateAPIView):
-    """POST /api/appointments/book/ — patients only."""
     serializer_class = AppointmentCreateSerializer
     permission_classes = [IsAuthenticated, IsPatient]
 
@@ -55,19 +55,30 @@ class BookAppointmentView(generics.CreateAPIView):
         requested_start = _ensure_aware(data['scheduled_start'])
         requested_end = _ensure_aware(data['scheduled_end'])
 
-        slot_matches = any(s == requested_start and e == requested_end for s, e in slots)
+        slot_matches = any(
+            s['start'] == requested_start and s['end'] == requested_end and s['is_available']
+            for s in slots
+        )
         if not slot_matches:
             raise ValidationError("Selected slot is no longer available")
 
         serializer.save(patient_id=self.request.user.id, status='pending')
-
+    
         notify_user(
-            user_id=data['doctor'].id_id,  # ← .id_id, not .id — see previous fix
+            user_id=data['doctor'].id_id,
             type='appointment_booked',
             title='New appointment request',
             body=f'A patient requested a booking on {data["scheduled_start"].strftime("%b %d, %I:%M %p")}',
             data={'appointment_id': str(serializer.instance.id)},
         )
+
+    def create(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        self.perform_create(serializer)
+        # return the full appointment (including id) using the READ serializer, not the create one
+        output = AppointmentSerializer(serializer.instance)
+        return Response(output.data, status=status.HTTP_201_CREATED)
 
 
 @api_view(['POST'])
