@@ -14,8 +14,8 @@ String get _wsHost {
   return 'localhost';
 }
 
-final String wsBaseUrl =
-    'ws://$_wsHost:8000'; // Android emulator; swap for LAN IP on a physical device
+const String wsBaseUrl =
+    'wss://call-appoint.azurewebsites.net'; // Android emulator; swap for LAN IP on a physical device
 
 final chatHistoryProvider = FutureProvider.autoDispose
     .family<List<ChatMessage>, String>((ref, appointmentId) async {

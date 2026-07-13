@@ -1,12 +1,14 @@
 import os
+from pathlib import Path
 from decouple import config
+
+BASE_DIR = Path(__file__).resolve().parent.parent
 
 SECRET_KEY = config('DJANGO_SECRET_KEY')
 DEBUG = config('DEBUG', default=False, cast=bool)
 TIME_ZONE = 'Asia/Kathmandu'
 USE_TZ = True
-ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='').split(',')
-DEBUG = config('DEBUG', default=False, cast=bool)
+ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='*').split(',')
 
 INSTALLED_APPS = [
     'daphne',
@@ -19,7 +21,7 @@ INSTALLED_APPS = [
 
     'rest_framework',
     'corsheaders',
-    'channels', 
+    'channels',
     'accounts',
     'doctors',
     'appointments',
@@ -30,6 +32,7 @@ INSTALLED_APPS = [
     'chat',
     'notifications',
 ]
+
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
@@ -44,6 +47,7 @@ TEMPLATES = [
         },
     },
 ]
+
 MIDDLEWARE = [
     'corsheaders.middleware.CorsMiddleware',
     'django.middleware.security.SecurityMiddleware',
@@ -75,27 +79,33 @@ REST_FRAMEWORK = {
         'rest_framework.permissions.IsAuthenticated',
     ],
 }
+
 ASGI_APPLICATION = 'config.asgi.application'
-ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='*').split(',')
+
 CHANNEL_LAYERS = {
     'default': {
         'BACKEND': 'channels.layers.InMemoryChannelLayer',
     },
 }
-STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
+
+STATIC_ROOT = BASE_DIR / 'staticfiles'
+STATIC_URL = 'static/'
 STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
+
+ROOT_URLCONF = 'config.urls'
+
 SUPABASE_URL = config('SUPABASE_URL')
 SUPABASE_ANON_KEY = config('SUPABASE_ANON_KEY')
 SUPABASE_SERVICE_ROLE_KEY = config('SUPABASE_SERVICE_ROLE_KEY')
 SUPABASE_JWKS_URL = f"{SUPABASE_URL}/auth/v1/.well-known/jwks.json"
-# dev only — tighten before prod
-CORS_ALLOW_ALL_ORIGINS = False
-STATIC_URL = 'static/'
-ROOT_URLCONF = 'config.urls'
 
+CORS_ALLOW_ALL_ORIGINS = False
+CORS_ALLOW_ALL_ORIGINS = config('CORS_ALLOW_ALL_ORIGINS', default=False, cast=bool)
+_cors_origins = config('CORS_ALLOWED_ORIGINS', default='')
+CORS_ALLOWED_ORIGINS = _cors_origins.split(',') if _cors_origins else []
 KHALTI_SECRET_KEY = config('KHALTI_SECRET_KEY')
 KHALTI_BASE_URL = config('KHALTI_BASE_URL', default='https://dev.khalti.com/api/v2/epayment')
-KHALTI_RETURN_URL = config('KHALTI_RETURN_URL', default='https://callappoint.app/payment-callback')
-KHALTI_WEBSITE_URL = config('KHALTI_WEBSITE_URL', default='https://callappoint.app')
+KHALTI_RETURN_URL = config('KHALTI_RETURN_URL', default='https://call-appoint.azurewebsites.net/payment-callback')
+KHALTI_WEBSITE_URL = config('KHALTI_WEBSITE_URL', default='https://call-appoint.azurewebsites.net')
 
 FIREBASE_CREDENTIALS_PATH = config('FIREBASE_CREDENTIALS_PATH')
