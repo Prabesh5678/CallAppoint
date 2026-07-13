@@ -108,4 +108,4 @@ KHALTI_BASE_URL = config('KHALTI_BASE_URL', default='https://dev.khalti.com/api/
 KHALTI_RETURN_URL = config('KHALTI_RETURN_URL', default='https://call-appoint.azurewebsites.net/payment-callback')
 KHALTI_WEBSITE_URL = config('KHALTI_WEBSITE_URL', default='https://call-appoint.azurewebsites.net')
 
-FIREBASE_CREDENTIALS_PATH = config('FIREBASE_CREDENTIALS_PATH')
+FIREBASE_CREDENTIALS_PATH = config('FIREBASE_CREDENTIALS_PATH', default='secrets/firebase-service-account.json')
