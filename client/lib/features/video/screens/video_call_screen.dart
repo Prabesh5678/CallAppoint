@@ -16,24 +16,35 @@ class VideoCallScreen extends ConsumerStatefulWidget {
 }
 
 class _VideoCallScreenState extends ConsumerState<VideoCallScreen> {
+  // Metered.ca TURN/STUN servers (from your Metered dashboard credentials).
+  // NOTE: these credentials are visible to anyone who decompiles the app —
+  // fine for testing, but for production fetch them at runtime from your
+  // own backend (Metered's REST API issues short-lived credentials) instead
+  // of hardcoding them here.
   static const Map<String, dynamic> _iceServersConfig = {
     'iceServers': [
       {
-        'urls': ['stun:stun.l.google.com:19302'],
+        'urls': ['stun:stun.relay.metered.ca:80'],
       },
-      // Free TURN server for TESTING ONLY (openrelay.metered.ca) — this is
-      // rate-limited and not meant for production traffic, but it's enough
-      // to confirm whether missing TURN is why connections are flaky for
-      // you. Swap for your own coturn deployment or a paid provider
-      // (Twilio, Metered, Xirsys) before shipping.
       {
-        'urls': [
-          'turn:openrelay.metered.ca:80',
-          'turn:openrelay.metered.ca:443',
-          'turn:openrelay.metered.ca:443?transport=tcp',
-        ],
-        'username': 'openrelayproject',
-        'credential': 'openrelayproject',
+        'urls': ['turn:global.relay.metered.ca:80'],
+        'username': '175aa236231a8375c1a75c2f',
+        'credential': 'yNC4rOKivp5wSX9M',
+      },
+      {
+        'urls': ['turn:global.relay.metered.ca:80?transport=tcp'],
+        'username': '175aa236231a8375c1a75c2f',
+        'credential': 'yNC4rOKivp5wSX9M',
+      },
+      {
+        'urls': ['turn:global.relay.metered.ca:443'],
+        'username': '175aa236231a8375c1a75c2f',
+        'credential': 'yNC4rOKivp5wSX9M',
+      },
+      {
+        'urls': ['turns:global.relay.metered.ca:443?transport=tcp'],
+        'username': '175aa236231a8375c1a75c2f',
+        'credential': 'yNC4rOKivp5wSX9M',
       },
     ],
   };
