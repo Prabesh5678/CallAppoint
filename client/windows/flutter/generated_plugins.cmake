@@ -7,6 +7,7 @@ list(APPEND FLUTTER_PLUGIN_LIST
   connectivity_plus
   flutter_inappwebview_windows
   flutter_secure_storage_windows
+  flutter_webrtc
   url_launcher_windows
 )
 
