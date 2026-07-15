@@ -120,5 +120,7 @@ KHALTI_RETURN_URL = config('KHALTI_RETURN_URL', default='https://call-appoint.az
 KHALTI_WEBSITE_URL = config('KHALTI_WEBSITE_URL', default='https://call-appoint.azurewebsites.net')
 
 ADMIN_API_TOKEN = config('ADMIN_API_TOKEN', default='dev_admin_token_12345')
+ADMIN_USERNAME = config('ADMIN_USERNAME', default='admin')
+ADMIN_PASSWORD = config('ADMIN_PASSWORD', default='changeme123')
 
 FIREBASE_CREDENTIALS_PATH = config('FIREBASE_CREDENTIALS_PATH', default='secrets/firebase-service-account.json')

@@ -4,9 +4,27 @@ from rest_framework.response import Response
 from rest_framework.decorators import api_view, authentication_classes, permission_classes
 from django.utils import timezone
 from django.db import connection
+from django.conf import settings
 from accounts.admin_auth import StaticAdminAuthentication
 from accounts.models import User
 from doctors.models import DoctorProfile, Specialty
+
+
+@api_view(['POST'])
+@authentication_classes([]) # No auth needed to login
+@permission_classes([])
+def admin_login(request):
+    username = request.data.get('username')
+    password = request.data.get('password')
+
+    if username == settings.ADMIN_USERNAME and password == settings.ADMIN_PASSWORD:
+        # Return the secret token that the frontend must use for all other calls
+        return Response({
+            'admin_token': settings.ADMIN_API_TOKEN,
+            'detail': 'Login successful'
+        })
+
+    return Response({'detail': 'Invalid credentials'}, status=401)
 
 
 class AdminListPatientsView(APIView):

@@ -1,10 +1,11 @@
 from django.urls import path
 from .views import (
     AdminListPatientsView, AdminListDoctorsView, approve_doctor, reject_doctor, remove_user,
-    AdminSpecialtyView, delete_specialty,
+    AdminSpecialtyView, delete_specialty, admin_login,
 )
 
 urlpatterns = [
+    path('login/', admin_login, name='admin-login'),
     path('patients/', AdminListPatientsView.as_view(), name='admin-patients'),
     path('doctors/', AdminListDoctorsView.as_view(), name='admin-doctors'),
     path('doctors/<uuid:doctor_id>/approve/', approve_doctor, name='admin-approve-doctor'),

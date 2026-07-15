@@ -69,15 +69,21 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 ),
               SizedBox(
                 width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: _loading ? null : _login,
-                  child: _loading
-                      ? const SizedBox(
-                          height: 20,
-                          width: 20,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : const Text('Log In'),
+                child: GestureDetector(
+                  onLongPress: () {
+                    // Secret shortcut to Admin Panel
+                    context.push('/secret-admin');
+                  },
+                  child: ElevatedButton(
+                    onPressed: _loading ? null : _login,
+                    child: _loading
+                        ? const SizedBox(
+                            height: 20,
+                            width: 20,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Text('Log In'),
+                  ),
                 ),
               ),
               TextButton(
