@@ -10,7 +10,7 @@ on:
       - master
     paths:
       - 'server/**'
-      - '.github/workflows/main_call-appoint.yml'  
+      - '.github/workflows/master_call-appoint.yml'  
   workflow_dispatch:
 
 jobs:
@@ -53,7 +53,7 @@ jobs:
         run: |
           source antenv/bin/activate
           python manage.py collectstatic --noinput
-          
+
       - name: Upload artifact for deployment jobs
         uses: actions/upload-artifact@v4
         with:
