@@ -10,6 +10,7 @@ import '../features/doctors/screens/doctor_detail_screen.dart';
 import '../features/chat/screens/chat_screen.dart';
 import '../features/video/screens/video_call_screen.dart';
 import '../features/doctors/screens/apply_doctor_screen.dart';
+import '../admin_app/admin_login_screen.dart';
 import 'supabase_client.dart';
 
 final routerProvider = Provider<GoRouter>((ref) {
@@ -19,6 +20,9 @@ final routerProvider = Provider<GoRouter>((ref) {
       ref.watch(authStateProvider.stream),
     ),
     redirect: (context, state) {
+      final isSecretAdmin = state.matchedLocation == '/secret-admin';
+      if (isSecretAdmin) return null;
+
       final loggedIn = supabase.auth.currentSession != null;
       final loggingIn =
           state.matchedLocation == '/login' ||
@@ -43,13 +47,14 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: '/chat/:appointmentId',
         builder: (context, state) => ChatScreen(appointmentId: state.pathParameters['appointmentId']!),
       ),
-      GoRoute(
-        path: '/video/:appointmentId',
-        builder: (context, state) => VideoCallScreen(appointmentId: state.pathParameters['appointmentId']!),
-      ),
+      // ... existing routes ...
       GoRoute(
         path: '/apply-doctor',
         builder: (context, state) => const ApplyDoctorScreen(),
+      ),
+      GoRoute(
+        path: '/secret-admin',
+        builder: (context, state) => const AdminLoginScreen(),
       ),
     ],
   );

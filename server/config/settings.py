@@ -35,6 +35,7 @@ INSTALLED_APPS = [
     'payments',
     'chat',
     'notifications',
+    'adminapi',
 ]
 
 TEMPLATES = [
