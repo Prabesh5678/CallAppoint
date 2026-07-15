@@ -34,6 +34,26 @@ jobs:
           source antenv/bin/activate
           pip install -r requirements.txt
 
+      - name: Collect static files
+        working-directory: ./server
+        env:
+          DJANGO_SECRET_KEY: "build-time-placeholder"
+          DEBUG: "False"
+          ALLOWED_HOSTS: "call-appoint.azurewebsites.net"
+          SUPABASE_URL: "https://placeholder.supabase.co"
+          SUPABASE_ANON_KEY: "placeholder"
+          SUPABASE_SERVICE_ROLE_KEY: "placeholder"
+          SUPABASE_DB_NAME: "postgres"
+          SUPABASE_DB_USER: "placeholder"
+          SUPABASE_DB_PASSWORD: "placeholder"
+          SUPABASE_DB_HOST: "placeholder.supabase.co"
+          SUPABASE_DB_PORT: "5432"
+          KHALTI_SECRET_KEY: "placeholder"
+          FIREBASE_CREDENTIALS_JSON: "{}"
+        run: |
+          source antenv/bin/activate
+          python manage.py collectstatic --noinput
+          
       - name: Upload artifact for deployment jobs
         uses: actions/upload-artifact@v4
         with:
