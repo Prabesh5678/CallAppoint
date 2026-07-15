@@ -26,9 +26,16 @@ class AdminListDoctorsView(APIView):
 
     def get(self, request):
         status_filter = request.query_params.get('status')  # pending/approved/rejected
+        specialty_filter = request.query_params.get('specialty')
+
         qs = DoctorProfile.objects.select_related('id')
+
         if status_filter:
             qs = qs.filter(verification_status=status_filter)
+
+        if specialty_filter:
+            qs = qs.filter(doctor_specialties__specialty_id=specialty_filter)
+
         data = [{
             'id': str(d.id_id),
             'full_name': d.id.full_name,
@@ -36,6 +43,7 @@ class AdminListDoctorsView(APIView):
             'verification_status': d.verification_status,
             'consultation_fee': str(d.consultation_fee),
             'created_at': d.created_at,
+            'specialties': [ds.specialty.name for ds in d.doctor_specialties.all()]
         } for d in qs]
         return Response(data)
 
@@ -58,6 +66,23 @@ def approve_doctor(request, doctor_id):
         cursor.execute("UPDATE users SET role = 'doctor' WHERE id = %s", [str(doctor_id)])
 
     return Response({'detail': 'Doctor approved'})
+
+
+@api_view(['POST'])
+@authentication_classes([StaticAdminAuthentication])
+@permission_classes([])
+def reject_doctor(request, doctor_id):
+    try:
+        profile = DoctorProfile.objects.get(id=doctor_id)
+    except DoctorProfile.DoesNotExist:
+        return Response({'detail': 'Not found'}, status=404)
+
+    reason = request.data.get('reason', 'No reason provided.')
+    profile.verification_status = 'rejected'
+    profile.rejection_reason = reason
+    profile.save()
+
+    return Response({'detail': 'Doctor rejected'})
 
 
 @api_view(['DELETE'])
