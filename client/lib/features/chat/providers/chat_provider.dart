@@ -1,18 +1,11 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:io' show Platform;
-import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 import '../../../core/dio_client.dart';
 import '../../../core/supabase_client.dart';
 import '../models/chat_message.dart';
 
-String get _wsHost {
-  if (kIsWeb) return 'localhost';
-  if (Platform.isAndroid) return '10.0.2.2';
-  return 'localhost';
-}
 
 const String wsBaseUrl =
     'wss://call-appoint.azurewebsites.net'; // Android emulator; swap for LAN IP on a physical device

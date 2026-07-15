@@ -28,8 +28,16 @@ final doctorApplicationControllerProvider = Provider(
 
 final applicationStatusProvider =
     FutureProvider.autoDispose<Map<String, dynamic>?>((ref) async {
-      final response = await DioClient.instance.get(
-        '/doctors/application-status/',
-      );
-      return response.data as Map<String, dynamic>?;
+      try {
+        final response = await DioClient.instance.get(
+          '/doctors/application-status/',
+        );
+        if (response.data == null) return null;
+        if (response.data is Map<String, dynamic>) {
+          return response.data as Map<String, dynamic>;
+        }
+        return null;
+      } catch (e) {
+        return null;
+      }
     });
