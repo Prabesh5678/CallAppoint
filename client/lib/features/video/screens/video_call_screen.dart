@@ -17,10 +17,6 @@ class VideoCallScreen extends ConsumerStatefulWidget {
 
 class _VideoCallScreenState extends ConsumerState<VideoCallScreen> {
   // Metered.ca TURN/STUN servers (from your Metered dashboard credentials).
-  // NOTE: these credentials are visible to anyone who decompiles the app —
-  // fine for testing, but for production fetch them at runtime from your
-  // own backend (Metered's REST API issues short-lived credentials) instead
-  // of hardcoding them here.
   static const Map<String, dynamic> _iceServersConfig = {
     'iceServers': [
       {
@@ -56,6 +52,14 @@ class _VideoCallScreenState extends ConsumerState<VideoCallScreen> {
   WebSocketChannel? _channel;
   bool _connecting = true;
   bool _remoteJoined = false;
+
+  // Local media toggle states
+  bool _micMuted = false;
+  bool _cameraOff = false;
+
+  // Remote states (persistent indicators)
+  bool _remoteCameraOff = false;
+  bool _remoteMicMuted = false;
 
   @override
   void initState() {
@@ -125,6 +129,20 @@ class _VideoCallScreenState extends ConsumerState<VideoCallScreen> {
             RTCIceCandidate(c['candidate'], c['sdpMid'], c['sdpMLineIndex']),
           );
           break;
+        case 'media-toggle':
+          // Persist remote camera/mic state instead of a toast
+          setState(() {
+            if (data['cameraOff'] != null) {
+              _remoteCameraOff = data['cameraOff'];
+            }
+            if (data['micMuted'] != null) {
+              _remoteMicMuted = data['micMuted'];
+            }
+          });
+          break;
+        case 'call-end':
+          _hangUp(notifyRemote: false); // Remote already dropped, just clean up
+          break;
       }
     }, onError: (e) => debugPrint('Signaling error: $e'));
 
@@ -143,18 +161,51 @@ class _VideoCallScreenState extends ConsumerState<VideoCallScreen> {
     _channel?.sink.add(jsonEncode(data));
   }
 
-  Future<void> _hangUp() async {
-    await _localStream?.dispose();
+  void _toggleMic() {
+    final audioTracks = _localStream?.getAudioTracks();
+    if (audioTracks != null && audioTracks.isNotEmpty) {
+      final audioTrack = audioTracks.first;
+      audioTrack.enabled = !audioTrack.enabled;
+      setState(() => _micMuted = !audioTrack.enabled);
+      _send({'type': 'media-toggle', 'micMuted': _micMuted});
+    }
+  }
+
+  void _toggleCamera() {
+    final videoTracks = _localStream?.getVideoTracks();
+    if (videoTracks != null && videoTracks.isNotEmpty) {
+      final videoTrack = videoTracks.first;
+      videoTrack.enabled = !videoTrack.enabled;
+      setState(() => _cameraOff = !videoTrack.enabled);
+      _send({'type': 'media-toggle', 'cameraOff': _cameraOff});
+    }
+  }
+
+  Future<void> _hangUp({bool notifyRemote = true}) async {
+    if (notifyRemote) {
+      _send({'type': 'call-end'});
+    }
+    _stopLocalStream();
     await _pc?.close();
     _channel?.sink.close();
     if (mounted) Navigator.pop(context);
+  }
+
+  void _stopLocalStream() {
+    if (_localStream != null) {
+      for (var track in _localStream!.getTracks()) {
+        track.stop();
+      }
+      _localStream!.dispose();
+      _localStream = null;
+    }
   }
 
   @override
   void dispose() {
     _localRenderer.dispose();
     _remoteRenderer.dispose();
-    _localStream?.dispose();
+    _stopLocalStream();
     _pc?.close();
     _channel?.sink.close();
     super.dispose();
@@ -168,13 +219,33 @@ class _VideoCallScreenState extends ConsumerState<VideoCallScreen> {
           ? const Center(child: CircularProgressIndicator(color: Colors.white))
           : Stack(
               children: [
+                // 1. Fullscreen remote feed or placeholder
                 Positioned.fill(
                   child: _remoteJoined
-                      ? RTCVideoView(
-                          _remoteRenderer,
-                          objectFit:
-                              RTCVideoViewObjectFit.RTCVideoViewObjectFitCover,
-                        )
+                      ? (_remoteCameraOff
+                            // Show camera-off icon persistently when remote camera is off
+                            ? Center(
+                                child: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: const [
+                                    Icon(
+                                      Icons.videocam_off,
+                                      color: Colors.white70,
+                                      size: 48,
+                                    ),
+                                    SizedBox(height: 8),
+                                    Text(
+                                      "Camera is off",
+                                      style: TextStyle(color: Colors.white70),
+                                    ),
+                                  ],
+                                ),
+                              )
+                            : RTCVideoView(
+                                _remoteRenderer,
+                                objectFit: RTCVideoViewObjectFit
+                                    .RTCVideoViewObjectFitCover,
+                              ))
                       : const Center(
                           child: Text(
                             'Waiting for the other person to join...',
@@ -185,26 +256,95 @@ class _VideoCallScreenState extends ConsumerState<VideoCallScreen> {
                           ),
                         ),
                 ),
+
+                // 2. Remote mic muted indicator (persistent, overlaid on remote feed)
+                if (_remoteJoined && _remoteMicMuted)
+                  Positioned(
+                    top: 40,
+                    left: 16,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 6,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.black54,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: const [
+                          Icon(Icons.mic_off, color: Colors.white, size: 18),
+                          SizedBox(width: 4),
+                          Text("Muted", style: TextStyle(color: Colors.white)),
+                        ],
+                      ),
+                    ),
+                  ),
+
+                // 3. Picture-in-Picture self view
                 Positioned(
                   top: 40,
                   right: 16,
                   width: 110,
                   height: 150,
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(12),
-                    child: RTCVideoView(_localRenderer, mirror: true),
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: Colors.black54,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    clipBehavior: Clip.antiAlias,
+                    child: _cameraOff
+                        ? const Center(
+                            child: Icon(
+                              Icons.videocam_off,
+                              color: Colors.white,
+                              size: 28,
+                            ),
+                          )
+                        : RTCVideoView(_localRenderer, mirror: true),
                   ),
                 ),
+
+                // 4. Control dock
                 Positioned(
                   bottom: 40,
                   left: 0,
                   right: 0,
-                  child: Center(
-                    child: FloatingActionButton(
-                      backgroundColor: Colors.red,
-                      onPressed: _hangUp,
-                      child: const Icon(Icons.call_end),
-                    ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      FloatingActionButton(
+                        heroTag: 'mic',
+                        backgroundColor: _micMuted
+                            ? Colors.grey
+                            : Colors.white24,
+                        onPressed: _toggleMic,
+                        child: Icon(
+                          _micMuted ? Icons.mic_off : Icons.mic,
+                          color: Colors.white,
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      FloatingActionButton(
+                        heroTag: 'end',
+                        backgroundColor: Colors.red,
+                        onPressed: () => _hangUp(),
+                        child: const Icon(Icons.call_end, color: Colors.white),
+                      ),
+                      const SizedBox(width: 16),
+                      FloatingActionButton(
+                        heroTag: 'cam',
+                        backgroundColor: _cameraOff
+                            ? Colors.grey
+                            : Colors.white24,
+                        onPressed: _toggleCamera,
+                        child: Icon(
+                          _cameraOff ? Icons.videocam_off : Icons.videocam,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ],

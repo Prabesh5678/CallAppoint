@@ -22,17 +22,26 @@ class _DoctorHomeScreenState extends ConsumerState<DoctorHomeScreen> {
     return Scaffold(
       body: IndexedStack(
         index: _tabIndex,
-        children: const [
-          _DoctorAppointmentsView(),
-          _ScheduleTab(),
-        ],
+        children: const [_DoctorAppointmentsView(), _ScheduleTab()],
       ),
       bottomNavigationBar: NavigationBar(
         selectedIndex: _tabIndex,
-        onDestinationSelected: (index) => setState(() => _tabIndex = index),
+        onDestinationSelected: (index) {
+          setState(() => _tabIndex = index);
+          // Trigger dynamic refresh when returning to the appointments tab
+          if (index == 0) {
+            ref.invalidate(myAppointmentsProvider);
+          }
+        },
         destinations: const [
-          NavigationDestination(icon: Icon(Icons.calendar_today), label: 'Appointments'),
-          NavigationDestination(icon: Icon(Icons.schedule), label: 'My Schedule'),
+          NavigationDestination(
+            icon: Icon(Icons.calendar_today),
+            label: 'Appointments',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.schedule),
+            label: 'My Schedule',
+          ),
         ],
       ),
     );
@@ -49,7 +58,16 @@ class _DoctorAppointmentsView extends ConsumerWidget {
       child: Scaffold(
         appBar: AppBar(
           title: const Text('Appointments'),
-          actions: const [ThemeToggleButton(), LogoutButton()],
+          actions: [
+            // Explicit manual refresh button (Highly visible, perfect for web/desktop)
+            IconButton(
+              icon: const Icon(Icons.refresh),
+              tooltip: 'Refresh list',
+              onPressed: () => ref.invalidate(myAppointmentsProvider),
+            ),
+            const ThemeToggleButton(),
+            const LogoutButton(),
+          ],
           bottom: const TabBar(
             tabs: [
               Tab(text: 'Requests'),
@@ -58,6 +76,12 @@ class _DoctorAppointmentsView extends ConsumerWidget {
             ],
           ),
         ),
+        // Floating Action Button as an extra visual manual escape hatch
+        floatingActionButton: FloatingActionButton(
+          onPressed: () => ref.invalidate(myAppointmentsProvider),
+          tooltip: 'Refresh Appointments',
+          child: const Icon(Icons.refresh),
+        ),
         body: Consumer(
           builder: (context, ref, _) {
             final appointmentsAsync = ref.watch(myAppointmentsProvider);
@@ -65,20 +89,48 @@ class _DoctorAppointmentsView extends ConsumerWidget {
 
             return appointmentsAsync.when(
               loading: () => const Center(child: CircularProgressIndicator()),
-              error: (e, _) => Center(child: Text('Error: $e')),
+              error: (e, _) => Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text('Error: $e'),
+                    const SizedBox(height: 16),
+                    ElevatedButton.icon(
+                      onPressed: () => ref.invalidate(myAppointmentsProvider),
+                      icon: const Icon(Icons.refresh),
+                      label: const Text('Retry'),
+                    ),
+                  ],
+                ),
+              ),
               data: (appointments) {
-                final pending = appointments.where((a) => a.status == 'pending').toList();
-                final upcoming = appointments.where((a) => a.status == 'confirmed').toList();
+                final pending = appointments
+                    .where((a) => a.status == 'pending')
+                    .toList();
+                final upcoming = appointments
+                    .where((a) => a.status == 'confirmed')
+                    .toList();
                 final past = appointments
-                    .where((a) => ['completed', 'cancelled', 'rejected', 'no_show'].contains(a.status))
+                    .where(
+                      (a) => [
+                        'completed',
+                        'cancelled',
+                        'rejected',
+                        'no_show',
+                      ].contains(a.status),
+                    )
                     .toList();
 
-                Widget buildList(List<Appointment> list, {bool isPending = false}) {
+                Widget buildList(
+                  List<Appointment> list, {
+                  bool isPending = false,
+                }) {
                   if (list.isEmpty) {
                     return const Center(child: Text('Nothing here yet'));
                   }
                   return RefreshIndicator(
-                    onRefresh: () async => ref.invalidate(myAppointmentsProvider),
+                    onRefresh: () async =>
+                        ref.invalidate(myAppointmentsProvider),
                     child: ListView.builder(
                       padding: const EdgeInsets.symmetric(vertical: 8),
                       itemCount: list.length,

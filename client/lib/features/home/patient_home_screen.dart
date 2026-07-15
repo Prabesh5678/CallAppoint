@@ -27,7 +27,13 @@ class _PatientHomeScreenState extends ConsumerState<PatientHomeScreen> {
       ),
       bottomNavigationBar: NavigationBar(
         selectedIndex: _tabIndex,
-        onDestinationSelected: (index) => setState(() => _tabIndex = index),
+        onDestinationSelected: (index) {
+          setState(() => _tabIndex = index);
+          // Trigger dynamic refresh when returning to the appointments tab (Index 1)
+          if (index == 1) {
+            ref.invalidate(myAppointmentsProvider);
+          }
+        },
         destinations: const [
           NavigationDestination(
             icon: Icon(Icons.search),
@@ -173,13 +179,41 @@ class _MyAppointmentsTab extends ConsumerWidget {
     return Scaffold(
       appBar: AppBar(
         title: const Text('My Appointments'),
-        actions: const [ThemeToggleButton(), LogoutButton()],
+        actions: [
+          // Explicit manual refresh button (Highly visible, perfect for web/desktop)
+          IconButton(
+            icon: const Icon(Icons.refresh),
+            tooltip: 'Refresh list',
+            onPressed: () => ref.invalidate(myAppointmentsProvider),
+          ),
+          const ThemeToggleButton(),
+          const LogoutButton(),
+        ],
+      ),
+      // Visual fallback button for mobile/desktop layout
+      floatingActionButton: FloatingActionButton(
+        onPressed: () => ref.invalidate(myAppointmentsProvider),
+        tooltip: 'Refresh Appointments',
+        child: const Icon(Icons.refresh),
       ),
       body: RefreshIndicator(
         onRefresh: () async => ref.invalidate(myAppointmentsProvider),
         child: appointmentsAsync.when(
           loading: () => const Center(child: CircularProgressIndicator()),
-          error: (e, _) => Center(child: Text('Error: $e')),
+          error: (e, _) => Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text('Error: $e'),
+                const SizedBox(height: 16),
+                ElevatedButton.icon(
+                  onPressed: () => ref.invalidate(myAppointmentsProvider),
+                  icon: const Icon(Icons.refresh),
+                  label: const Text('Retry'),
+                ),
+              ],
+            ),
+          ),
           data: (appointments) {
             if (appointments.isEmpty) {
               return const Center(child: Text('No appointments yet'));
