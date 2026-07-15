@@ -108,9 +108,17 @@ CORS_ALLOW_ALL_ORIGINS = False
 CORS_ALLOW_ALL_ORIGINS = config('CORS_ALLOW_ALL_ORIGINS', default=False, cast=bool)
 _cors_origins = config('CORS_ALLOWED_ORIGINS', default='')
 CORS_ALLOWED_ORIGINS = _cors_origins.split(',') if _cors_origins else []
+
+from corsheaders.defaults import default_headers
+CORS_ALLOW_HEADERS = list(default_headers) + [
+    "x-admin-token",
+]
+
 KHALTI_SECRET_KEY = config('KHALTI_SECRET_KEY')
 KHALTI_BASE_URL = config('KHALTI_BASE_URL', default='https://dev.khalti.com/api/v2/epayment')
 KHALTI_RETURN_URL = config('KHALTI_RETURN_URL', default='https://call-appoint.azurewebsites.net/payment-callback')
 KHALTI_WEBSITE_URL = config('KHALTI_WEBSITE_URL', default='https://call-appoint.azurewebsites.net')
+
+ADMIN_API_TOKEN = config('ADMIN_API_TOKEN', default='dev_admin_token_12345')
 
 FIREBASE_CREDENTIALS_PATH = config('FIREBASE_CREDENTIALS_PATH', default='secrets/firebase-service-account.json')
