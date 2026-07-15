@@ -15,7 +15,7 @@ class AdminListPatientsView(APIView):
 
     def get(self, request):
         patients = User.objects.filter(role='patient').values(
-            'id', 'full_name', 'email', 'phone', 'is_active', 'created_at'
+            'id', 'full_name', 'phone', 'is_active', 'created_at'
         ).order_by('-created_at')
         return Response(list(patients))
 
@@ -32,7 +32,6 @@ class AdminListDoctorsView(APIView):
         data = [{
             'id': str(d.id_id),
             'full_name': d.id.full_name,
-            'email': d.id.email,
             'license_number': d.license_number,
             'verification_status': d.verification_status,
             'consultation_fee': str(d.consultation_fee),
