@@ -1,4 +1,5 @@
 import json
+import sys
 from django.apps import AppConfig
 from django.conf import settings
 from decouple import config
@@ -8,6 +9,11 @@ class NotificationsConfig(AppConfig):
     name = 'notifications'
 
     def ready(self):
+        # Skip Firebase init during GitHub Actions static collection
+        if 'collectstatic' in sys.argv:
+            print("collectstatic detected: Skipping Firebase initialization.")
+            return
+
         import firebase_admin
         from firebase_admin import credentials
 
@@ -15,7 +21,7 @@ class NotificationsConfig(AppConfig):
             return
 
         firebase_json = config('FIREBASE_CREDENTIALS_JSON', default=None)
-        if firebase_json:
+        if firebase_json and firebase_json != '{}':
             # production: credentials passed as a raw JSON string env var
             cred_dict = json.loads(firebase_json)
             cred = credentials.Certificate(cred_dict)
