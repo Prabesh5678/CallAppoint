@@ -49,7 +49,7 @@ jobs:
           SUPABASE_DB_HOST: "placeholder.supabase.co"
           SUPABASE_DB_PORT: "5432"
           KHALTI_SECRET_KEY: "placeholder"
-          FIREBASE_CREDENTIALS_JSON: "{}"
+          FIREBASE_CREDENTIALS_JSON: '{"type": "service_account", "project_id": "build-placeholder", "private_key_id": "abcd1234bcae", "private_key": "-----BEGIN PRIVATE KEY-----\nMIIEvwIBADANBgkqhkiG9w0BAQEFAASCBKkwggSlAgEAAoIBAQC7\n-----END PRIVATE KEY-----\n", "client_email": "placeholder@build-placeholder.iam.gserviceaccount.com"}'
         run: |
           source antenv/bin/activate
           python manage.py collectstatic --noinput
