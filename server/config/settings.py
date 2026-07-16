@@ -123,4 +123,7 @@ ADMIN_API_TOKEN = config('ADMIN_API_TOKEN', default='dev_admin_token_12345')
 ADMIN_USERNAME = config('ADMIN_USERNAME', default='admin')
 ADMIN_PASSWORD = config('ADMIN_PASSWORD', default='changeme123')
 
+COTURN_URL = config('COTURN_URL', default='turn.20-2-129-98.sslip.io')
+COTURN_SECRET = config('COTURN_SECRET', default='')
+
 FIREBASE_CREDENTIALS_PATH = config('FIREBASE_CREDENTIALS_PATH', default='secrets/firebase-service-account.json')

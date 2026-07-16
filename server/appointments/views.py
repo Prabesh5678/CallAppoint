@@ -1,3 +1,7 @@
+import hmac
+import hashlib
+import base64
+import time
 from datetime import datetime
 from rest_framework import generics, status
 from rest_framework.decorators import api_view, permission_classes
@@ -164,16 +168,38 @@ def get_video_room(request, pk):
 @permission_classes([IsAuthenticated])
 def get_ice_servers(request):
     """
-    Returns ICE server configuration (STUN/TURN) for WebRTC.
-    Securely fetches credentials from environment variables instead of hardcoding in the client.
+    Generates dynamic, time-limited CoTurn credentials using HMAC-SHA1.
+    Valid for 24 hours.
     """
+    if not settings.COTURN_SECRET:
+        # Fallback to public STUN if secret is missing (for safety)
+        return Response({
+            'iceServers': [{'urls': ['stun:turn.20-2-129-98.sslip.io:3478']}]
+        })
+
+    # CoTurn uses UTC unix timestamp for time-limited credentials
+    expiry_time = int(time.time()) + 86400  # 24 hours
+    username = f"{expiry_time}:{request.user.id}" # Standard format: timestamp:username
+
+    # Generate HMAC-SHA1 signature as the password
+    secret = settings.COTURN_SECRET.encode('utf-8')
+    message = username.encode('utf-8')
+
+    hashed = hmac.new(secret, message, hashlib.sha1)
+    password = base64.b64encode(hashed.digest()).decode('utf-8')
+
     return Response({
         'iceServers': [
-            {'urls': ['stun:stun.relay.metered.ca:80']},
+            {'urls': ['stun:turn.20-2-129-98.sslip.io:3478']},
             {
-                'urls': [getattr(settings, 'METERED_TURN_URL', 'turn:global.relay.metered.ca:80')],
-                'username': getattr(settings, 'METERED_USERNAME', '175aa236231a8375c1a75c2f'),
-                'credential': getattr(settings, 'METERED_CREDENTIAL', 'yNC4rOKivp5wSX9M'),
+                'urls': [f"turn:{settings.COTURN_URL}:3478"],
+                'username': username,
+                'credential': password,
+            },
+            {
+                'urls': [f"turns:{settings.COTURN_URL}:5349?transport=tcp"],
+                'username': username,
+                'credential': password,
             },
         ]
     })
