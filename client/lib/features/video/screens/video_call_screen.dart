@@ -1,9 +1,11 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 import '../../../core/supabase_client.dart';
+import '../../../core/dio_client.dart';
 
 const wsBaseUrl = 'wss://call-appoint.azurewebsites.net';
 
@@ -16,50 +18,22 @@ class VideoCallScreen extends ConsumerStatefulWidget {
 }
 
 class _VideoCallScreenState extends ConsumerState<VideoCallScreen> {
-  // Metered.ca TURN/STUN servers (from your Metered dashboard credentials).
-  static const Map<String, dynamic> _iceServersConfig = {
-    'iceServers': [
-      {
-        'urls': ['stun:stun.relay.metered.ca:80'],
-      },
-      {
-        'urls': ['turn:global.relay.metered.ca:80'],
-        'username': '175aa236231a8375c1a75c2f',
-        'credential': 'yNC4rOKivp5wSX9M',
-      },
-      {
-        'urls': ['turn:global.relay.metered.ca:80?transport=tcp'],
-        'username': '175aa236231a8375c1a75c2f',
-        'credential': 'yNC4rOKivp5wSX9M',
-      },
-      {
-        'urls': ['turn:global.relay.metered.ca:443'],
-        'username': '175aa236231a8375c1a75c2f',
-        'credential': 'yNC4rOKivp5wSX9M',
-      },
-      {
-        'urls': ['turns:global.relay.metered.ca:443?transport=tcp'],
-        'username': '175aa236231a8375c1a75c2f',
-        'credential': 'yNC4rOKivp5wSX9M',
-      },
-    ],
-  };
-
   final _localRenderer = RTCVideoRenderer();
   final _remoteRenderer = RTCVideoRenderer();
   RTCPeerConnection? _pc;
   MediaStream? _localStream;
   WebSocketChannel? _channel;
+
   bool _connecting = true;
   bool _remoteJoined = false;
 
-  // Local media toggle states
-  bool _micMuted = false;
-  bool _cameraOff = false;
+  // Controls & Remote state
+  bool _micEnabled = true;
+  bool _camEnabled = true;
+  bool _remoteMicEnabled = true;
+  bool _remoteCamEnabled = true;
 
-  // Remote states (persistent indicators)
-  bool _remoteCameraOff = false;
-  bool _remoteMicMuted = false;
+  Timer? _statsPollTimer;
 
   @override
   void initState() {
@@ -68,34 +42,51 @@ class _VideoCallScreenState extends ConsumerState<VideoCallScreen> {
   }
 
   Future<void> _init() async {
-    await _localRenderer.initialize();
-    await _remoteRenderer.initialize();
+    try {
+      await _localRenderer.initialize();
+      await _remoteRenderer.initialize();
 
-    _localStream = await navigator.mediaDevices.getUserMedia({
-      'audio': true,
-      'video': {'facingMode': 'user'},
-    });
-    _localRenderer.srcObject = _localStream;
+      // 1. Fetch secure ICE servers from backend
+      final response = await DioClient.instance.get('/appointments/ice-servers/');
+      final iceConfig = Map<String, dynamic>.from(response.data);
 
-    _pc = await createPeerConnection(_iceServersConfig);
-    for (var track in _localStream!.getTracks()) {
-      await _pc!.addTrack(track, _localStream!);
-    }
+      // 2. Get User Media
+      _localStream = await navigator.mediaDevices.getUserMedia({
+        'audio': true,
+        'video': {'facingMode': 'user'},
+      });
+      _localRenderer.srcObject = _localStream;
 
-    _pc!.onTrack = (event) {
-      if (event.streams.isNotEmpty) {
-        setState(() {
-          _remoteRenderer.srcObject = event.streams[0];
-          _remoteJoined = true;
-        });
+      // 3. Create Peer Connection with dynamic config
+      _pc = await createPeerConnection(iceConfig);
+
+      for (var track in _localStream!.getTracks()) {
+        await _pc!.addTrack(track, _localStream!);
       }
-    };
 
-    _pc!.onIceCandidate = (candidate) {
-      _send({'type': 'ice', 'candidate': candidate.toMap()});
-    };
+      _pc!.onTrack = (event) {
+        if (event.streams.isNotEmpty) {
+          setState(() {
+            _remoteRenderer.srcObject = event.streams[0];
+            _remoteJoined = true;
+          });
+        }
+      };
 
-    _connectSignaling();
+      _pc!.onIceCandidate = (candidate) {
+        _send({'type': 'ice', 'candidate': candidate.toMap()});
+      };
+
+      _connectSignaling();
+    } catch (e) {
+      debugPrint('Initialization error: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to initialize call: $e'), backgroundColor: Colors.red),
+        );
+        Navigator.pop(context);
+      }
+    }
   }
 
   void _connectSignaling() {
@@ -111,47 +102,36 @@ class _VideoCallScreenState extends ConsumerState<VideoCallScreen> {
           await _createOffer();
           break;
         case 'offer':
-          await _pc!.setRemoteDescription(
-            RTCSessionDescription(data['sdp'], data['sdpType']),
-          );
+          await _pc!.setRemoteDescription(RTCSessionDescription(data['sdp'], data['sdpType']));
           final answer = await _pc!.createAnswer();
           await _pc!.setLocalDescription(answer);
           _send({'type': 'answer', 'sdp': answer.sdp, 'sdpType': answer.type});
           break;
         case 'answer':
-          await _pc!.setRemoteDescription(
-            RTCSessionDescription(data['sdp'], data['sdpType']),
-          );
+          await _pc!.setRemoteDescription(RTCSessionDescription(data['sdp'], data['sdpType']));
           break;
         case 'ice':
           final c = data['candidate'];
-          await _pc!.addCandidate(
-            RTCIceCandidate(c['candidate'], c['sdpMid'], c['sdpMLineIndex']),
-          );
+          await _pc!.addCandidate(RTCIceCandidate(c['candidate'], c['sdpMid'], c['sdpMLineIndex']));
           break;
-        case 'media-toggle':
-          // Persist remote camera/mic state instead of a toast
-          setState(() {
-            if (data['cameraOff'] != null) {
-              _remoteCameraOff = data['cameraOff'];
-            }
-            if (data['micMuted'] != null) {
-              _remoteMicMuted = data['micMuted'];
-            }
-          });
+        case 'toggle-audio':
+          setState(() => _remoteMicEnabled = data['enabled']);
           break;
-        case 'call-end':
-          _hangUp(notifyRemote: false); // Remote already dropped, just clean up
+        case 'toggle-video':
+          setState(() => _remoteCamEnabled = data['enabled']);
+          break;
+        case 'bye':
+          _hangUp();
           break;
       }
     }, onError: (e) => debugPrint('Signaling error: $e'));
 
     _send({'type': 'ready'});
-
     setState(() => _connecting = false);
   }
 
   Future<void> _createOffer() async {
+    if (_pc == null) return;
     final offer = await _pc!.createOffer();
     await _pc!.setLocalDescription(offer);
     _send({'type': 'offer', 'sdp': offer.sdp, 'sdpType': offer.type});
@@ -162,50 +142,45 @@ class _VideoCallScreenState extends ConsumerState<VideoCallScreen> {
   }
 
   void _toggleMic() {
-    final audioTracks = _localStream?.getAudioTracks();
-    if (audioTracks != null && audioTracks.isNotEmpty) {
-      final audioTrack = audioTracks.first;
-      audioTrack.enabled = !audioTrack.enabled;
-      setState(() => _micMuted = !audioTrack.enabled);
-      _send({'type': 'media-toggle', 'micMuted': _micMuted});
+    if (_localStream == null) return;
+    setState(() => _micEnabled = !_micEnabled);
+    for (var track in _localStream!.getAudioTracks()) {
+      track.enabled = _micEnabled;
     }
+    _send({'type': 'toggle-audio', 'enabled': _micEnabled});
   }
 
-  void _toggleCamera() {
-    final videoTracks = _localStream?.getVideoTracks();
-    if (videoTracks != null && videoTracks.isNotEmpty) {
-      final videoTrack = videoTracks.first;
-      videoTrack.enabled = !videoTrack.enabled;
-      setState(() => _cameraOff = !videoTrack.enabled);
-      _send({'type': 'media-toggle', 'cameraOff': _cameraOff});
+  void _toggleCam() {
+    if (_localStream == null) return;
+    setState(() => _camEnabled = !_camEnabled);
+    for (var track in _localStream!.getVideoTracks()) {
+      track.enabled = _camEnabled;
     }
+    _send({'type': 'toggle-video', 'enabled': _camEnabled});
   }
 
-  Future<void> _hangUp({bool notifyRemote = true}) async {
-    if (notifyRemote) {
-      _send({'type': 'call-end'});
+  Future<void> _hangUp() async {
+    _statsPollTimer?.cancel();
+    if (_localStream != null) {
+      for (var track in _localStream!.getTracks()) {
+        await track.stop();
+      }
+      await _localStream!.dispose();
+      _localStream = null;
     }
-    _stopLocalStream();
     await _pc?.close();
+    _pc = null;
     _channel?.sink.close();
     if (mounted) Navigator.pop(context);
   }
 
-  void _stopLocalStream() {
-    if (_localStream != null) {
-      for (var track in _localStream!.getTracks()) {
-        track.stop();
-      }
-      _localStream!.dispose();
-      _localStream = null;
-    }
-  }
-
   @override
   void dispose() {
+    _statsPollTimer?.cancel();
     _localRenderer.dispose();
     _remoteRenderer.dispose();
-    _stopLocalStream();
+    _localStream?.getTracks().forEach((t) => t.stop());
+    _localStream?.dispose();
     _pc?.close();
     _channel?.sink.close();
     super.dispose();
@@ -219,94 +194,61 @@ class _VideoCallScreenState extends ConsumerState<VideoCallScreen> {
           ? const Center(child: CircularProgressIndicator(color: Colors.white))
           : Stack(
               children: [
-                // 1. Fullscreen remote feed or placeholder
+                // Remote Video
                 Positioned.fill(
-                  child: _remoteJoined
-                      ? (_remoteCameraOff
-                            // Show camera-off icon persistently when remote camera is off
-                            ? Center(
-                                child: Column(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: const [
-                                    Icon(
-                                      Icons.videocam_off,
-                                      color: Colors.white70,
-                                      size: 48,
-                                    ),
-                                    SizedBox(height: 8),
-                                    Text(
-                                      "Camera is off",
-                                      style: TextStyle(color: Colors.white70),
-                                    ),
-                                  ],
+                  child: !_remoteJoined
+                      ? const Center(child: Text('Waiting for the other person...', style: TextStyle(color: Colors.white70)))
+                      : Stack(
+                          children: [
+                            RTCVideoView(_remoteRenderer, objectFit: RTCVideoViewObjectFit.RTCVideoViewObjectFitCover),
+                            if (!_remoteCamEnabled)
+                              Container(
+                                color: Colors.black87,
+                                child: const Center(
+                                  child: Column(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(Icons.videocam_off, color: Colors.white54, size: 80),
+                                      SizedBox(height: 16),
+                                      Text('Remote camera is off', style: TextStyle(color: Colors.white54, fontSize: 18)),
+                                    ],
+                                  ),
                                 ),
-                              )
-                            : RTCVideoView(
-                                _remoteRenderer,
-                                objectFit: RTCVideoViewObjectFit
-                                    .RTCVideoViewObjectFitCover,
-                              ))
-                      : const Center(
-                          child: Text(
-                            'Waiting for the other person to join...',
-                            style: TextStyle(
-                              color: Colors.white70,
-                              fontSize: 16,
-                            ),
-                          ),
+                              ),
+                            if (!_remoteMicEnabled)
+                              Positioned(
+                                top: 40,
+                                left: 16,
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                  decoration: BoxDecoration(color: Colors.redAccent.withOpacity(0.8), borderRadius: BorderRadius.circular(20)),
+                                  child: const Row(
+                                    children: [
+                                      Icon(Icons.mic_off, color: Colors.white, size: 16),
+                                      SizedBox(width: 6),
+                                      Text('Remote muted', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                          ],
                         ),
                 ),
 
-                // 2. Remote mic muted indicator (persistent, overlaid on remote feed)
-                if (_remoteJoined && _remoteMicMuted)
+                // Local Video Preview
+                if (_camEnabled)
                   Positioned(
                     top: 40,
-                    left: 16,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 6,
-                      ),
-                      decoration: BoxDecoration(
-                        color: Colors.black54,
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: const [
-                          Icon(Icons.mic_off, color: Colors.white, size: 18),
-                          SizedBox(width: 4),
-                          Text("Muted", style: TextStyle(color: Colors.white)),
-                        ],
-                      ),
-                    ),
-                  ),
-
-                // 3. Picture-in-Picture self view
-                Positioned(
-                  top: 40,
-                  right: 16,
-                  width: 110,
-                  height: 150,
-                  child: Container(
-                    decoration: BoxDecoration(
-                      color: Colors.black54,
+                    right: 16,
+                    width: 110,
+                    height: 150,
+                    child: ClipRRect(
                       borderRadius: BorderRadius.circular(12),
+                      child: RTCVideoView(_localRenderer, mirror: true),
                     ),
-                    clipBehavior: Clip.antiAlias,
-                    child: _cameraOff
-                        ? const Center(
-                            child: Icon(
-                              Icons.videocam_off,
-                              color: Colors.white,
-                              size: 28,
-                            ),
-                          )
-                        : RTCVideoView(_localRenderer, mirror: true),
                   ),
-                ),
 
-                // 4. Control dock
+                // Control Buttons
                 Positioned(
                   bottom: 40,
                   left: 0,
@@ -314,41 +256,45 @@ class _VideoCallScreenState extends ConsumerState<VideoCallScreen> {
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      FloatingActionButton(
-                        heroTag: 'mic',
-                        backgroundColor: _micMuted
-                            ? Colors.grey
-                            : Colors.white24,
+                      _ControlButton(
+                        icon: _micEnabled ? Icons.mic : Icons.mic_off,
+                        color: _micEnabled ? Colors.white24 : Colors.red,
                         onPressed: _toggleMic,
-                        child: Icon(
-                          _micMuted ? Icons.mic_off : Icons.mic,
-                          color: Colors.white,
-                        ),
                       ),
-                      const SizedBox(width: 16),
+                      const SizedBox(width: 20),
                       FloatingActionButton(
-                        heroTag: 'end',
+                        heroTag: 'hangup',
                         backgroundColor: Colors.red,
-                        onPressed: () => _hangUp(),
-                        child: const Icon(Icons.call_end, color: Colors.white),
+                        onPressed: _hangUp,
+                        child: const Icon(Icons.call_end),
                       ),
-                      const SizedBox(width: 16),
-                      FloatingActionButton(
-                        heroTag: 'cam',
-                        backgroundColor: _cameraOff
-                            ? Colors.grey
-                            : Colors.white24,
-                        onPressed: _toggleCamera,
-                        child: Icon(
-                          _cameraOff ? Icons.videocam_off : Icons.videocam,
-                          color: Colors.white,
-                        ),
+                      const SizedBox(width: 20),
+                      _ControlButton(
+                        icon: _camEnabled ? Icons.videocam : Icons.videocam_off,
+                        color: _camEnabled ? Colors.white24 : Colors.red,
+                        onPressed: _toggleCam,
                       ),
                     ],
                   ),
                 ),
               ],
             ),
+    );
+  }
+}
+
+class _ControlButton extends StatelessWidget {
+  final IconData icon;
+  final Color color;
+  final VoidCallback onPressed;
+  const _ControlButton({required this.icon, required this.color, required this.onPressed});
+
+  @override
+  Widget build(BuildContext context) {
+    return CircleAvatar(
+      radius: 28,
+      backgroundColor: color,
+      child: IconButton(icon: Icon(icon, color: Colors.white), onPressed: onPressed),
     );
   }
 }

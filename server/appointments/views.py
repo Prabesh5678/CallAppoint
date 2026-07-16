@@ -10,6 +10,7 @@ from .serializers import AppointmentSerializer, AppointmentCreateSerializer
 from .services import get_available_slots
 from notifications.services import notify_user
 from django.utils import timezone as dj_timezone
+from django.conf import settings
 
 
 def _ensure_aware(dt):
@@ -156,4 +157,23 @@ def get_video_room(request, pk):
         'room_name': appt.video_room_id,
         'jitsi_domain': 'meet.jit.si',
         'display_name': user.db_user.full_name,
+    })
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def get_ice_servers(request):
+    """
+    Returns ICE server configuration (STUN/TURN) for WebRTC.
+    Securely fetches credentials from environment variables instead of hardcoding in the client.
+    """
+    return Response({
+        'iceServers': [
+            {'urls': ['stun:stun.relay.metered.ca:80']},
+            {
+                'urls': [getattr(settings, 'METERED_TURN_URL', 'turn:global.relay.metered.ca:80')],
+                'username': getattr(settings, 'METERED_USERNAME', '175aa236231a8375c1a75c2f'),
+                'credential': getattr(settings, 'METERED_CREDENTIAL', 'yNC4rOKivp5wSX9M'),
+            },
+        ]
     })

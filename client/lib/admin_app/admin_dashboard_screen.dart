@@ -191,14 +191,23 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
   }
 
   Future<void> _addSpecialty(String name) async {
+    final newSpec = {'id': 'temp-${DateTime.now().millisecondsSinceEpoch}', 'name': name};
+    final original = List.from(_allSpecialties);
+
+    setState(() {
+      _allSpecialties.add(newSpec);
+      _divisionController.clear();
+    });
+
     try {
       final response = await AdminDioClient.instance.post('/specialties/', data: {'name': name});
-      _divisionController.clear();
-      // Optimistically add to local list
+      // Replace temp with real ID from server
       setState(() {
-        _allSpecialties.add(response.data);
+        final idx = _allSpecialties.indexWhere((s) => s['id'] == newSpec['id']);
+        if (idx != -1) _allSpecialties[idx] = response.data;
       });
     } catch (e) {
+      setState(() => _allSpecialties = original);
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed: $e')));
     }
   }

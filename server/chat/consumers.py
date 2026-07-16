@@ -31,6 +31,15 @@ class ChatConsumer(AsyncWebsocketConsumer):
 
     async def disconnect(self, close_code):
         if hasattr(self, 'room_group_name'):
+            # Notify the other party that we are leaving
+            await self.channel_layer.group_send(
+                self.room_group_name,
+                {
+                    'type': 'signal_message',
+                    'sender_id': str(self.user['id']),
+                    'payload': {'type': 'bye'},
+                }
+            )
             await self.channel_layer.group_discard(self.room_group_name, self.channel_name)
 
     async def receive(self, text_data):
@@ -120,6 +129,15 @@ class VideoSignalConsumer(AsyncWebsocketConsumer):
 
     async def disconnect(self, close_code):
         if hasattr(self, 'room_group_name'):
+            # Notify the other party that we are leaving
+            await self.channel_layer.group_send(
+                self.room_group_name,
+                {
+                    'type': 'signal_message',
+                    'sender_id': str(self.user['id']),
+                    'payload': {'type': 'bye'},
+                }
+            )
             await self.channel_layer.group_discard(self.room_group_name, self.channel_name)
 
     async def receive(self, text_data):
