@@ -1,4 +1,4 @@
-name: Flutter Android Build
+name: Flutter Build and Deploy
 
 on:
   push:
@@ -8,6 +8,7 @@ on:
       - 'client/**'
       - '.github/workflows/android-build.yml'
   pull_request:
+    types: [opened, synchronize, reopened, closed]
     branches:
       - master
     paths:
@@ -16,6 +17,7 @@ on:
 
 jobs:
   build_android:
+    if: github.event_name == 'push' || (github.event_name == 'pull_request' && github.event.action != 'closed')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -30,7 +32,7 @@ jobs:
         run: flutter pub get
 
       - name: Build APK
-        working-directory: client 
+        working-directory: client
         run: flutter build apk --release
 
       - name: Upload APK artifact
@@ -38,3 +40,42 @@ jobs:
         with:
           name: app-release-apk
           path: client/build/app/outputs/flutter-apk/app-release.apk
+
+  build_and_deploy_web:
+    if: github.event_name == 'push' || (github.event_name == 'pull_request' && github.event.action != 'closed')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+
+      - name: Flutter Pub Get
+        working-directory: client
+        run: flutter pub get
+
+      - name: Build Flutter Web
+        working-directory: client
+        run: flutter build web --release
+
+      - name: Deploy to Azure Static Web Apps
+        uses: Azure/static-web-apps-deploy@v1
+        with:
+          azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN }}
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          action: upload
+          app_location: "client/build/web"
+          output_location: ""
+          skip_app_build: true
+
+  close_pull_request_job:
+    if: github.event_name == 'pull_request' && github.event.action == 'closed'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Close Pull Request
+        uses: Azure/static-web-apps-deploy@v1
+        with:
+          azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN }}
+          action: close
