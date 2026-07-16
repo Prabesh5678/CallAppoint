@@ -301,17 +301,24 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
                 ),
 
                 // 3. Patients Tab
-                ListView.builder(
-                  itemCount: _allPatients.length,
-                  itemBuilder: (context, i) {
-                    final p = _allPatients[i];
-                    return ListTile(
-                      title: Text(p['full_name'] ?? ''),
-                      subtitle: Text(p['phone'] ?? 'No phone'),
-                      trailing: IconButton(icon: const Icon(Icons.delete, color: Colors.red), onPressed: () => _removeUser(p['id'], isDoctor: false)),
-                    );
-                  },
-                ),
+                _allPatients.isEmpty
+                    ? const Center(
+                        child: Text(
+                          'No patients registered yet',
+                          style: TextStyle(color: Colors.grey, fontSize: 16),
+                        ),
+                      )
+                    : ListView.builder(
+                        itemCount: _allPatients.length,
+                        itemBuilder: (context, i) {
+                          final p = _allPatients[i];
+                          return ListTile(
+                            title: Text(p['full_name'] ?? ''),
+                            subtitle: Text(p['phone'] ?? 'No phone'),
+                            trailing: IconButton(icon: const Icon(Icons.delete, color: Colors.red), onPressed: () => _removeUser(p['id'], isDoctor: false)),
+                          );
+                        },
+                      ),
 
                 // 4. Divisions Tab
                 Column(
@@ -337,16 +344,23 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
                       ]),
                     ),
                     Expanded(
-                      child: ListView.builder(
-                        itemCount: _allSpecialties.length,
-                        itemBuilder: (context, i) {
-                          final s = _allSpecialties[i];
-                          return ListTile(
-                            title: Text(s['name']),
-                            trailing: IconButton(icon: const Icon(Icons.delete, color: Colors.red), onPressed: () => _deleteSpecialty(s['id'], s['name'])),
-                          );
-                        },
-                      ),
+                      child: _allSpecialties.isEmpty
+                          ? const Center(
+                              child: Text(
+                                'No divisions added yet',
+                                style: TextStyle(color: Colors.grey),
+                              ),
+                            )
+                          : ListView.builder(
+                              itemCount: _allSpecialties.length,
+                              itemBuilder: (context, i) {
+                                final s = _allSpecialties[i];
+                                return ListTile(
+                                  title: Text(s['name']),
+                                  trailing: IconButton(icon: const Icon(Icons.delete, color: Colors.red), onPressed: () => _deleteSpecialty(s['id'], s['name'])),
+                                );
+                              },
+                            ),
                     ),
                   ],
                 ),

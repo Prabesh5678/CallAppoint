@@ -4,7 +4,6 @@ import 'package:intl/intl.dart';
 import 'package:khalti_checkout_flutter/khalti_checkout_flutter.dart';
 import '../../payments/providers/payment_provider.dart';
 import '../providers/doctor_detail_provider.dart';
-import '../../appointments/providers/booking_provider.dart';
 
 class DoctorDetailScreen extends ConsumerStatefulWidget {
   final String doctorId;

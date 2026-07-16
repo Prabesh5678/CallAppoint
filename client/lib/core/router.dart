@@ -8,7 +8,6 @@ import '../features/home/patient_home_screen.dart';
 import '../features/home/doctor_home_screen.dart';
 import '../features/doctors/screens/doctor_detail_screen.dart';
 import '../features/chat/screens/chat_screen.dart';
-import '../features/video/screens/video_call_screen.dart';
 import '../features/doctors/screens/apply_doctor_screen.dart';
 import '../admin_app/admin_login_screen.dart';
 import 'supabase_client.dart';
