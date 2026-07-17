@@ -5,8 +5,10 @@ import '../../shared/widgets/theme_toggle_button.dart';
 import '../../shared/widgets/logout_button.dart';
 import '../../shared/widgets/doctor_card.dart';
 import '../../shared/widgets/appointment_card.dart';
+import '../../shared/widgets/pulse_indicator.dart';
 import '../doctors/providers/doctor_provider.dart';
 import '../appointments/providers/appointment_provider.dart';
+import '../notifications/providers/notification_provider.dart';
 
 class PatientHomeScreen extends ConsumerStatefulWidget {
   const PatientHomeScreen({super.key});
@@ -20,6 +22,15 @@ class _PatientHomeScreenState extends ConsumerState<PatientHomeScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final presenceMap = ref.watch(notificationManagerProvider);
+    final appointmentsAsync = ref.watch(myAppointmentsProvider);
+
+    // Check if any appointment has active presence for the bottom nav dot
+    final hasAnyPresence = appointmentsAsync.maybeWhen(
+      data: (list) => list.any((a) => presenceMap[a.id] == true),
+      orElse: () => false,
+    );
+
     return Scaffold(
       body: IndexedStack(
         index: _tabIndex,
@@ -29,18 +40,27 @@ class _PatientHomeScreenState extends ConsumerState<PatientHomeScreen> {
         selectedIndex: _tabIndex,
         onDestinationSelected: (index) {
           setState(() => _tabIndex = index);
-          // Trigger dynamic refresh when returning to the appointments tab (Index 1)
           if (index == 1) {
             ref.invalidate(myAppointmentsProvider);
           }
         },
-        destinations: const [
-          NavigationDestination(
+        destinations: [
+          const NavigationDestination(
             icon: Icon(Icons.search),
             label: 'Find Doctors',
           ),
           NavigationDestination(
-            icon: Icon(Icons.calendar_today),
+            icon: Stack(
+              children: [
+                const Icon(Icons.calendar_today),
+                if (hasAnyPresence)
+                  const Positioned(
+                    right: 0,
+                    top: 0,
+                    child: PulseIndicator(size: 6),
+                  ),
+              ],
+            ),
             label: 'Appointments',
           ),
         ],
@@ -180,7 +200,6 @@ class _MyAppointmentsTab extends ConsumerWidget {
       appBar: AppBar(
         title: const Text('My Appointments'),
         actions: [
-          // Explicit manual refresh button (Highly visible, perfect for web/desktop)
           IconButton(
             icon: const Icon(Icons.refresh),
             tooltip: 'Refresh list',
@@ -190,7 +209,6 @@ class _MyAppointmentsTab extends ConsumerWidget {
           const LogoutButton(),
         ],
       ),
-      // Visual fallback button for mobile/desktop layout
       floatingActionButton: FloatingActionButton(
         onPressed: () => ref.invalidate(myAppointmentsProvider),
         tooltip: 'Refresh Appointments',

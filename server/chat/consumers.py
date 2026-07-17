@@ -67,7 +67,7 @@ class ChatConsumer(AsyncWebsocketConsumer):
         if not peer_id:
             return
 
-        # 1. Real-time Webhook-style notification (WebSocket)
+        # Explicitly broadcast to the peer's unique group
         group_name = f'user_notifications_{peer_id}'
         await self.channel_layer.group_send(
             group_name,
@@ -75,7 +75,7 @@ class ChatConsumer(AsyncWebsocketConsumer):
                 'type': 'user_notification',
                 'payload': {
                     'type': 'video_presence',
-                    'appointment_id': self.appointment_id,
+                    'appointment_id': str(self.appointment_id),
                     'role': self.user['role'],
                     'is_present': is_joining
                 }
@@ -183,11 +183,6 @@ class ChatConsumer(AsyncWebsocketConsumer):
         return {'id': str(msg.id), 'sent_at': msg.sent_at.isoformat()}
 
 class VideoSignalConsumer(AsyncWebsocketConsumer):
-    """
-    Relays WebRTC signaling messages (offer/answer/ICE candidates) between
-    the two participants of an appointment. Does not touch the DB at all —
-    pure message relay, same auth/authorization checks as chat.
-    """
     async def connect(self):
         self.appointment_id = self.scope['url_route']['kwargs']['appointment_id']
         self.room_group_name = f'video_{self.appointment_id}'
@@ -207,8 +202,22 @@ class VideoSignalConsumer(AsyncWebsocketConsumer):
         await self.channel_layer.group_add(self.room_group_name, self.channel_name)
         await self.accept()
 
+        # Track presence in cache IMMEDIATELY upon connection
+        cache_key = f"video_presence_{self.appointment_id}_{self.user['role']}"
+        cache.set(cache_key, True, timeout=3600)
+
+        # Notify the other party via their personal notification channel
+        await self._notify_peer_presence(is_joining=True)
+
     async def disconnect(self, close_code):
         if hasattr(self, 'room_group_name'):
+            # Clear presence in cache
+            cache_key = f"video_presence_{self.appointment_id}_{self.user['role']}"
+            cache.delete(cache_key)
+
+            # Notify the other party via their personal notification channel
+            await self._notify_peer_presence(is_joining=False)
+
             # Notify the other party that we are leaving
             await self.channel_layer.group_send(
                 self.room_group_name,
@@ -244,7 +253,7 @@ class VideoSignalConsumer(AsyncWebsocketConsumer):
         if not peer_id:
             return
 
-        # 1. Real-time Webhook-style notification (WebSocket)
+        # Explicitly broadcast to the peer's unique group
         group_name = f'user_notifications_{peer_id}'
         await self.channel_layer.group_send(
             group_name,
@@ -252,7 +261,7 @@ class VideoSignalConsumer(AsyncWebsocketConsumer):
                 'type': 'user_notification',
                 'payload': {
                     'type': 'video_presence',
-                    'appointment_id': self.appointment_id,
+                    'appointment_id': str(self.appointment_id),
                     'role': self.user['role'],
                     'is_present': is_joining
                 }

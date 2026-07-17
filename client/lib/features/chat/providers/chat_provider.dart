@@ -4,11 +4,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 import '../../../core/dio_client.dart';
 import '../../../core/supabase_client.dart';
+import '../../../core/config.dart';
 import '../models/chat_message.dart';
 
-
-const String wsBaseUrl =
-    'wss://call-appoint.azurewebsites.net'; // Android emulator; swap for LAN IP on a physical device
 
 final chatHistoryProvider = FutureProvider.autoDispose
     .family<List<ChatMessage>, String>((ref, appointmentId) async {
@@ -29,7 +27,7 @@ class ChatSocket {
     final token = supabase.auth.currentSession?.accessToken;
     if (token == null) return;
     _channel = WebSocketChannel.connect(
-      Uri.parse('$wsBaseUrl/ws/chat/$appointmentId/?token=$token'),
+      Uri.parse('${Config.wsBaseUrl}/ws/chat/$appointmentId/?token=$token'),
     );
     _channel!.stream.listen(
       (event) {

@@ -1,10 +1,9 @@
 import 'package:dio/dio.dart';
 import 'supabase_client.dart';
-
-const String apiBaseUrl = 'https://call-appoint.azurewebsites.net/api';
+import 'config.dart';
 
 class DioClient {
-  static final Dio _dio = Dio(BaseOptions(baseUrl: apiBaseUrl))
+  static final Dio _dio = Dio(BaseOptions(baseUrl: Config.apiBaseUrl))
     ..interceptors.add(
       InterceptorsWrapper(
         onRequest: (options, handler) async {

@@ -9,9 +9,8 @@ DEBUG = config('DEBUG', default=False, cast=bool)
 TIME_ZONE = 'Asia/Kathmandu'
 USE_TZ = True
 ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='*').split(',')
-CSRF_TRUSTED_ORIGINS = [
-    'https://call-appoint.azurewebsites.net',
-]
+_csrf_origins = config('CSRF_TRUSTED_ORIGINS', default='https://call-appoint.azurewebsites.net')
+CSRF_TRUSTED_ORIGINS = _csrf_origins.split(',')
 SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 
 INSTALLED_APPS = [

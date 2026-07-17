@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/dio_client.dart';
 import '../models/appointment.dart';
+import '../../notifications/providers/notification_provider.dart';
 
 final myAppointmentsProvider = FutureProvider.autoDispose<List<Appointment>>((
   ref,
@@ -12,15 +13,23 @@ final myAppointmentsProvider = FutureProvider.autoDispose<List<Appointment>>((
 });
 
 final peerPresenceProvider = StreamProvider.family.autoDispose<bool, String>((ref, appointmentId) async* {
-  // Poll the backend every 2 seconds for faster updates
-  while (true) {
-    try {
-      final response = await DioClient.instance.get('/chat/$appointmentId/video-presence/');
-      yield response.data['is_present'] as bool;
-    } catch (e) {
-      yield false;
-    }
-    await Future.delayed(const Duration(seconds: 2));
+  // 1. Initial fetch from API
+  bool currentStatus = false;
+  try {
+    final response = await DioClient.instance.get('/chat/$appointmentId/video-presence/');
+    currentStatus = response.data['is_present'] as bool;
+    yield currentStatus;
+  } catch (_) {
+    yield false;
+  }
+
+  // 2. Listen to real-time events from notification socket
+  final presenceMap = ref.watch(notificationManagerProvider);
+  if (presenceMap.containsKey(appointmentId)) {
+    yield presenceMap[appointmentId]!;
+  } else {
+    // If no new event has arrived, keep yielding the last known status
+    yield currentStatus;
   }
 });
 

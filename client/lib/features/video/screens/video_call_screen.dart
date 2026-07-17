@@ -6,8 +6,7 @@ import 'package:flutter_webrtc/flutter_webrtc.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 import '../../../core/supabase_client.dart';
 import '../../../core/dio_client.dart';
-
-const wsBaseUrl = 'wss://call-appoint.azurewebsites.net';
+import '../../../core/config.dart';
 
 class VideoCallScreen extends ConsumerStatefulWidget {
   final String appointmentId;
@@ -161,7 +160,7 @@ class _VideoCallScreenState extends ConsumerState<VideoCallScreen> {
   void _connectSignaling() {
     final token = supabase.auth.currentSession?.accessToken;
     _channel = WebSocketChannel.connect(
-      Uri.parse('$wsBaseUrl/ws/video/${widget.appointmentId}/?token=$token'),
+      Uri.parse('${Config.wsBaseUrl}/ws/video/${widget.appointmentId}/?token=$token'),
     );
 
     _channel!.stream.listen((event) async {

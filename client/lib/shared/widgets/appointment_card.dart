@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../features/appointments/models/appointment.dart';
 import '../../features/appointments/providers/appointment_provider.dart';
 import 'package:go_router/go_router.dart';
+import 'pulse_indicator.dart';
 
 class AppointmentCard extends ConsumerWidget {
   final Appointment appointment;
@@ -111,7 +112,7 @@ class AppointmentCard extends ConsumerWidget {
                   ),
                   child: Row(
                     children: [
-                      const _PulseIndicator(),
+                      const PulseIndicator(),
                       const SizedBox(width: 12),
                       Expanded(
                         child: Text(
@@ -163,7 +164,7 @@ class AppointmentCard extends ConsumerWidget {
                             Positioned(
                               right: 8,
                               top: 8,
-                              child: const _PulseIndicator(),
+                              child: const PulseIndicator(),
                             ),
                         ],
                       ),
@@ -209,48 +210,6 @@ class AppointmentCard extends ConsumerWidget {
               ],
             ],
           ),
-        ),
-      ),
-    );
-  }
-}
-
-class _PulseIndicator extends StatefulWidget {
-  const _PulseIndicator();
-
-  @override
-  State<_PulseIndicator> createState() => _PulseIndicatorState();
-}
-
-class _PulseIndicatorState extends State<_PulseIndicator>
-    with SingleTickerProviderStateMixin {
-  late AnimationController _controller;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = AnimationController(
-      vsync: this,
-      duration: const Duration(seconds: 1),
-    )..repeat(reverse: true);
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return FadeTransition(
-      opacity: _controller,
-      child: Container(
-        width: 8,
-        height: 8,
-        decoration: const BoxDecoration(
-          color: Colors.green,
-          shape: BoxShape.circle,
         ),
       ),
     );

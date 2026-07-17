@@ -1,6 +1,5 @@
 import 'package:dio/dio.dart';
-
-const String adminApiBaseUrl = 'https://call-appoint.azurewebsites.net/api/admin-panel';
+import '../core/config.dart';
 
 class AdminDioClient {
   static String? _token;
@@ -11,7 +10,7 @@ class AdminDioClient {
 
   static Dio get instance {
     final dio = Dio(BaseOptions(
-      baseUrl: adminApiBaseUrl,
+      baseUrl: Config.adminApiBaseUrl,
     ));
 
     if (_token != null) {
