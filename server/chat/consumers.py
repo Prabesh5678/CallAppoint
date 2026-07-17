@@ -33,14 +33,19 @@ class ChatConsumer(AsyncWebsocketConsumer):
         # Track presence in cache IMMEDIATELY upon connection
         cache_key = f"video_presence_{self.appointment_id}_{self.user['role']}"
         cache.set(cache_key, True, timeout=3600)
-        print(f"DEBUG: Tracking {self.user['role']} for {self.appointment_id}")
+
+        # Notify the other party via their personal notification channel
+        await self._notify_peer_presence(is_joining=True)
 
     async def disconnect(self, close_code):
         if hasattr(self, 'room_group_name'):
             # Clear presence in cache
             cache_key = f"video_presence_{self.appointment_id}_{self.user['role']}"
             cache.delete(cache_key)
-            print(f"DEBUG: Cleared {self.user['role']} for {self.appointment_id}")
+
+            # Notify the other party via their personal notification channel
+            await self._notify_peer_presence(is_joining=False)
+
             # Notify the other party that we are leaving
             await self.channel_layer.group_send(
                 self.room_group_name,
@@ -51,6 +56,64 @@ class ChatConsumer(AsyncWebsocketConsumer):
                 }
             )
             await self.channel_layer.group_discard(self.room_group_name, self.channel_name)
+
+    async def _notify_peer_presence(self, is_joining):
+        peer_id = await self._get_peer_id()
+        if not peer_id:
+            return
+
+        # 1. Real-time Webhook-style notification (WebSocket)
+        group_name = f'user_notifications_{peer_id}'
+        await self.channel_layer.group_send(
+            group_name,
+            {
+                'type': 'user_notification',
+                'payload': {
+                    'type': 'video_presence',
+                    'appointment_id': self.appointment_id,
+                    'role': self.user['role'],
+                    'is_present': is_joining
+                }
+            }
+        )
+
+        # 2. Push Notification (FCM) if joining
+        if is_joining:
+            await self._send_push_notification(peer_id)
+
+    async def _send_push_notification(self, peer_id):
+        from notifications.services import notify_user
+
+        # We run this in a thread to not block the consumer
+        def trigger_push():
+            role_name = "Doctor" if self.user['role'] == 'doctor' else "Patient"
+            notify_user(
+                user_id=peer_id,
+                type='call_waiting',
+                title='Call is ready!',
+                body=f'Your {role_name} has joined the video room and is waiting for you.',
+                data={
+                    'appointment_id': self.appointment_id,
+                    'click_action': 'FLUTTER_NOTIFICATION_CLICK',
+                }
+            )
+
+        import threading
+        threading.Thread(target=trigger_push).start()
+
+    @database_sync_to_async
+    def _get_peer_id(self):
+        from appointments.models import Appointment
+        try:
+            appt = Appointment.objects.get(id=self.appointment_id)
+            if self.user['role'] == 'doctor':
+                return str(appt.patient_id)
+            else:
+                # In appointment model, doctor is a ForeignKey to DoctorProfile.
+                # We need the user_id of the doctor.
+                return str(appt.doctor.user_id)
+        except Exception:
+            return None
 
     async def receive(self, text_data):
         data = json.loads(text_data)
@@ -140,14 +203,19 @@ class VideoSignalConsumer(AsyncWebsocketConsumer):
         # Track presence in cache IMMEDIATELY upon connection
         cache_key = f"video_presence_{self.appointment_id}_{self.user['role']}"
         cache.set(cache_key, True, timeout=3600)
-        print(f"DEBUG: Tracking {self.user['role']} for {self.appointment_id}")
+
+        # Notify the other party via their personal notification channel
+        await self._notify_peer_presence(is_joining=True)
 
     async def disconnect(self, close_code):
         if hasattr(self, 'room_group_name'):
             # Clear presence in cache
             cache_key = f"video_presence_{self.appointment_id}_{self.user['role']}"
             cache.delete(cache_key)
-            print(f"DEBUG: Cleared {self.user['role']} for {self.appointment_id}")
+
+            # Notify the other party via their personal notification channel
+            await self._notify_peer_presence(is_joining=False)
+
             # Notify the other party that we are leaving
             await self.channel_layer.group_send(
                 self.room_group_name,
@@ -158,6 +226,64 @@ class VideoSignalConsumer(AsyncWebsocketConsumer):
                 }
             )
             await self.channel_layer.group_discard(self.room_group_name, self.channel_name)
+
+    async def _notify_peer_presence(self, is_joining):
+        peer_id = await self._get_peer_id()
+        if not peer_id:
+            return
+
+        # 1. Real-time Webhook-style notification (WebSocket)
+        group_name = f'user_notifications_{peer_id}'
+        await self.channel_layer.group_send(
+            group_name,
+            {
+                'type': 'user_notification',
+                'payload': {
+                    'type': 'video_presence',
+                    'appointment_id': self.appointment_id,
+                    'role': self.user['role'],
+                    'is_present': is_joining
+                }
+            }
+        )
+
+        # 2. Push Notification (FCM) if joining
+        if is_joining:
+            await self._send_push_notification(peer_id)
+
+    async def _send_push_notification(self, peer_id):
+        from notifications.services import notify_user
+
+        # We run this in a thread to not block the consumer
+        def trigger_push():
+            role_name = "Doctor" if self.user['role'] == 'doctor' else "Patient"
+            notify_user(
+                user_id=peer_id,
+                type='call_waiting',
+                title='Call is ready!',
+                body=f'Your {role_name} has joined the video room and is waiting for you.',
+                data={
+                    'appointment_id': self.appointment_id,
+                    'click_action': 'FLUTTER_NOTIFICATION_CLICK',
+                }
+            )
+
+        import threading
+        threading.Thread(target=trigger_push).start()
+
+    @database_sync_to_async
+    def _get_peer_id(self):
+        from appointments.models import Appointment
+        try:
+            appt = Appointment.objects.get(id=self.appointment_id)
+            if self.user['role'] == 'doctor':
+                return str(appt.patient_id)
+            else:
+                # In appointment model, doctor is a ForeignKey to DoctorProfile.
+                # We need the user_id of the doctor.
+                return str(appt.doctor.user_id)
+        except Exception:
+            return None
 
     async def receive(self, text_data):
         data = json.loads(text_data)
