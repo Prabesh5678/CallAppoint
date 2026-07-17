@@ -5,6 +5,7 @@ import jwt
 from jwt import PyJWKClient
 from channels.generic.websocket import AsyncWebsocketConsumer
 from channels.db import database_sync_to_async
+from django.core.cache import cache
 
 _jwks_client = PyJWKClient(settings.SUPABASE_JWKS_URL)
 
