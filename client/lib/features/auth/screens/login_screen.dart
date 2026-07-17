@@ -26,7 +26,13 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           .signIn(_emailController.text.trim(), _passwordController.text);
       ref.invalidate(currentUserProfileProvider); // force a fresh /me/ fetch
     } catch (e) {
-      setState(() => _error = e.toString());
+      String errorMessage = e.toString();
+      if (errorMessage.contains('SocketException') || errorMessage.contains('Failed host lookup')) {
+        errorMessage = 'No internet connection. Please check your network and try again.';
+      } else if (errorMessage.contains('Invalid login credentials')) {
+        errorMessage = 'Invalid email or password.';
+      }
+      setState(() => _error = errorMessage);
     } finally {
       if (mounted) setState(() => _loading = false);
     }

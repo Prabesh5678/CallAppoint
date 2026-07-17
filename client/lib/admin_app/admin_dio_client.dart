@@ -5,7 +5,7 @@ const String adminApiBaseUrl = 'https://call-appoint.azurewebsites.net/api/admin
 class AdminDioClient {
   static String? _token;
 
-  static void setToken(String token) {
+  static void setToken(String? token) {
     _token = token;
   }
 

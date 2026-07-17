@@ -34,7 +34,11 @@ class AuthController {
   }
 
   Future<void> signOut() async {
-    await supabase.auth.signOut();
+    try {
+      await supabase.auth.signOut();
+    } catch (_) {
+      // Allow sign out to continue locally even if network fails
+    }
   }
 }
 

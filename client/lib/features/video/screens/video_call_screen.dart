@@ -33,7 +33,13 @@ class _VideoCallScreenState extends ConsumerState<VideoCallScreen> {
   bool _remoteMicEnabled = true;
   bool _remoteCamEnabled = true;
 
+  // Diagnostic Stats
   Timer? _statsPollTimer;
+  double _bitrateMbps = 0;
+  int _lastBytesReceived = 0;
+  double _latencyMs = 0;
+  String _connectionMethod = "Checking...";
+  bool _showStatsOverlay = false;
 
   @override
   void initState() {
@@ -70,11 +76,19 @@ class _VideoCallScreenState extends ConsumerState<VideoCallScreen> {
             _remoteRenderer.srcObject = event.streams[0];
             _remoteJoined = true;
           });
+          _startStatsPolling(); // Start diagnostic loop immediately
         }
       };
 
       _pc!.onIceCandidate = (candidate) {
         _send({'type': 'ice', 'candidate': candidate.toMap()});
+      };
+
+      _pc!.onConnectionState = (state) {
+        debugPrint('PeerConnection state: $state');
+        if (state == RTCPeerConnectionState.RTCPeerConnectionStateConnected) {
+          _startStatsPolling();
+        }
       };
 
       _connectSignaling();
@@ -87,6 +101,61 @@ class _VideoCallScreenState extends ConsumerState<VideoCallScreen> {
         Navigator.pop(context);
       }
     }
+  }
+
+  void _startStatsPolling() {
+    _statsPollTimer?.cancel();
+    _statsPollTimer = Timer.periodic(const Duration(seconds: 2), (_) async {
+      if (_pc == null || !mounted) return;
+
+      final stats = await _pc!.getStats();
+      for (var report in stats) {
+        // 1. More robust detection of Method & Latency
+        if (report.type == 'candidate-pair' &&
+           (report.values['nominated'] == true || report.values['state'] == 'succeeded')) {
+
+          final localId = report.values['localCandidateId'];
+          final remoteId = report.values['remoteCandidateId'];
+
+          String method = "Checking...";
+          try {
+            final localReport = stats.firstWhere((r) => r.id == localId);
+            final remoteReport = stats.firstWhere((r) => r.id == remoteId);
+
+            final lType = localReport.values['candidateType'].toString().toLowerCase();
+            final rType = remoteReport.values['candidateType'].toString().toLowerCase();
+
+            if (lType == 'relay' || rType == 'relay') {
+              method = "TURN (Relay)";
+            } else if (lType == 'srflx' || rType == 'srflx') {
+              method = "STUN (Direct)";
+            } else {
+              method = "HOST (Local)";
+            }
+          } catch (_) {}
+
+          if (mounted) {
+            setState(() {
+              _connectionMethod = method;
+              // Extract Latency: some devices use currentRoundTripTime or roundTripTime
+              final rtt = report.values['currentRoundTripTime'] ?? report.values['roundTripTime'] ?? 0;
+              _latencyMs = rtt * 1000;
+            });
+          }
+        }
+
+        // 2. Bandwidth (Incoming Bitrate)
+        if (report.type == 'inbound-rtp' && report.values['kind'] == 'video') {
+          int currentBytes = report.values['bytesReceived'] ?? 0;
+          if (_lastBytesReceived > 0 && mounted) {
+            setState(() {
+              _bitrateMbps = ((currentBytes - _lastBytesReceived) * 8) / (2 * 1000000);
+            });
+          }
+          _lastBytesReceived = currentBytes;
+        }
+      }
+    });
   }
 
   void _connectSignaling() {
@@ -234,6 +303,50 @@ class _VideoCallScreenState extends ConsumerState<VideoCallScreen> {
                           ],
                         ),
                 ),
+
+                // Diagnostic Stats Button & Overlay
+                if (_remoteJoined)
+                  Positioned(
+                    top: 100,
+                    left: 16,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        GestureDetector(
+                          onLongPressStart: (_) => setState(() => _showStatsOverlay = true),
+                          onLongPressEnd: (_) => setState(() => _showStatsOverlay = false),
+                          child: Container(
+                            padding: const EdgeInsets.all(6),
+                            decoration: const BoxDecoration(color: Colors.white24, shape: BoxShape.circle),
+                            child: const Icon(Icons.info_outline, color: Colors.white70, size: 20),
+                          ),
+                        ),
+                        if (_showStatsOverlay) ...[
+                          const SizedBox(height: 8),
+                          Container(
+                            padding: const EdgeInsets.all(10),
+                            decoration: BoxDecoration(
+                              color: Colors.black87,
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(color: Colors.white24),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text('Method: $_connectionMethod',
+                                    style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
+                                Text('Latency: ${_latencyMs.toStringAsFixed(0)} ms',
+                                    style: const TextStyle(color: Colors.white70, fontSize: 11)),
+                                Text('Bandwidth: ${_bitrateMbps.toStringAsFixed(2)} Mbps',
+                                    style: const TextStyle(color: Colors.white70, fontSize: 11)),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
 
                 // Local Video Preview
                 if (_camEnabled)

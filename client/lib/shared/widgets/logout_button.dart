@@ -29,7 +29,9 @@ class LogoutButton extends ConsumerWidget {
           ),
         );
         if (confirm == true) {
-          await supabase.auth.signOut();
+          try {
+            await supabase.auth.signOut();
+          } catch (_) {}
           if (context.mounted) context.go('/login');
         }
       },

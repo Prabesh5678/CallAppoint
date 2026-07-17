@@ -100,7 +100,11 @@ class _HomeRouterState extends ConsumerState<HomeRouter> {
               const SizedBox(height: 16),
               ElevatedButton(
                 onPressed: () async {
-                  await supabase.auth.signOut();
+                  try {
+                    await supabase.auth.signOut();
+                  } catch (_) {
+                    // Ignore network errors on signout and just go to login
+                  }
                   if (context.mounted) context.go('/login');
                 },
                 child: const Text('Back to Login'),

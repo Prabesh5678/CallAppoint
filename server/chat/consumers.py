@@ -30,8 +30,17 @@ class ChatConsumer(AsyncWebsocketConsumer):
         await self.channel_layer.group_add(self.room_group_name, self.channel_name)
         await self.accept()
 
+        # Track presence in cache IMMEDIATELY upon connection
+        cache_key = f"video_presence_{self.appointment_id}_{self.user['role']}"
+        cache.set(cache_key, True, timeout=3600)
+        print(f"DEBUG: Tracking {self.user['role']} for {self.appointment_id}")
+
     async def disconnect(self, close_code):
         if hasattr(self, 'room_group_name'):
+            # Clear presence in cache
+            cache_key = f"video_presence_{self.appointment_id}_{self.user['role']}"
+            cache.delete(cache_key)
+            print(f"DEBUG: Cleared {self.user['role']} for {self.appointment_id}")
             # Notify the other party that we are leaving
             await self.channel_layer.group_send(
                 self.room_group_name,
@@ -128,8 +137,17 @@ class VideoSignalConsumer(AsyncWebsocketConsumer):
         await self.channel_layer.group_add(self.room_group_name, self.channel_name)
         await self.accept()
 
+        # Track presence in cache IMMEDIATELY upon connection
+        cache_key = f"video_presence_{self.appointment_id}_{self.user['role']}"
+        cache.set(cache_key, True, timeout=3600)
+        print(f"DEBUG: Tracking {self.user['role']} for {self.appointment_id}")
+
     async def disconnect(self, close_code):
         if hasattr(self, 'room_group_name'):
+            # Clear presence in cache
+            cache_key = f"video_presence_{self.appointment_id}_{self.user['role']}"
+            cache.delete(cache_key)
+            print(f"DEBUG: Cleared {self.user['role']} for {self.appointment_id}")
             # Notify the other party that we are leaving
             await self.channel_layer.group_send(
                 self.room_group_name,
