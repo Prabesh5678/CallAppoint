@@ -30,22 +30,8 @@ class ChatConsumer(AsyncWebsocketConsumer):
         await self.channel_layer.group_add(self.room_group_name, self.channel_name)
         await self.accept()
 
-        # Track presence in cache IMMEDIATELY upon connection
-        cache_key = f"video_presence_{self.appointment_id}_{self.user['role']}"
-        cache.set(cache_key, True, timeout=3600)
-
-        # Notify the other party via their personal notification channel
-        await self._notify_peer_presence(is_joining=True)
-
     async def disconnect(self, close_code):
         if hasattr(self, 'room_group_name'):
-            # Clear presence in cache
-            cache_key = f"video_presence_{self.appointment_id}_{self.user['role']}"
-            cache.delete(cache_key)
-
-            # Notify the other party via their personal notification channel
-            await self._notify_peer_presence(is_joining=False)
-
             # Notify the other party that we are leaving
             await self.channel_layer.group_send(
                 self.room_group_name,
@@ -56,6 +42,25 @@ class ChatConsumer(AsyncWebsocketConsumer):
                 }
             )
             await self.channel_layer.group_discard(self.room_group_name, self.channel_name)
+
+    async def _notify_new_message(self, message_text):
+        peer_id = await self._get_peer_id()
+        if not peer_id:
+            return
+
+        group_name = f'user_notifications_{peer_id}'
+        await self.channel_layer.group_send(
+            group_name,
+            {
+                'type': 'user_notification',
+                'payload': {
+                    'type': 'new_chat_message',
+                    'appointment_id': self.appointment_id,
+                    'sender_name': self.user['full_name'] if 'full_name' in self.user else 'Someone',
+                    'message': message_text,
+                }
+            }
+        )
 
     async def _notify_peer_presence(self, is_joining):
         peer_id = await self._get_peer_id()
@@ -109,9 +114,8 @@ class ChatConsumer(AsyncWebsocketConsumer):
             if self.user['role'] == 'doctor':
                 return str(appt.patient_id)
             else:
-                # In appointment model, doctor is a ForeignKey to DoctorProfile.
-                # We need the user_id of the doctor.
-                return str(appt.doctor.user_id)
+                # appt.doctor_id refers to DoctorProfile.id, which is User.id
+                return str(appt.doctor_id)
         except Exception:
             return None
 
@@ -122,6 +126,9 @@ class ChatConsumer(AsyncWebsocketConsumer):
             return
 
         msg = await self._save_message(self.appointment_id, self.user['id'], message_text)
+
+        # Notify the other party via their personal notification channel
+        await self._notify_new_message(message_text)
 
         await self.channel_layer.group_send(
             self.room_group_name,
@@ -156,7 +163,7 @@ class ChatConsumer(AsyncWebsocketConsumer):
             payload = jwt.decode(token, signing_key.key, algorithms=['ES256', 'RS256'], audience='authenticated')
             from accounts.models import User
             db_user = User.objects.get(id=payload['sub'])
-            return {'id': db_user.id, 'role': db_user.role}
+            return {'id': db_user.id, 'role': db_user.role, 'full_name': db_user.full_name}
         except Exception:
             return None
 
@@ -200,22 +207,8 @@ class VideoSignalConsumer(AsyncWebsocketConsumer):
         await self.channel_layer.group_add(self.room_group_name, self.channel_name)
         await self.accept()
 
-        # Track presence in cache IMMEDIATELY upon connection
-        cache_key = f"video_presence_{self.appointment_id}_{self.user['role']}"
-        cache.set(cache_key, True, timeout=3600)
-
-        # Notify the other party via their personal notification channel
-        await self._notify_peer_presence(is_joining=True)
-
     async def disconnect(self, close_code):
         if hasattr(self, 'room_group_name'):
-            # Clear presence in cache
-            cache_key = f"video_presence_{self.appointment_id}_{self.user['role']}"
-            cache.delete(cache_key)
-
-            # Notify the other party via their personal notification channel
-            await self._notify_peer_presence(is_joining=False)
-
             # Notify the other party that we are leaving
             await self.channel_layer.group_send(
                 self.room_group_name,
@@ -226,6 +219,25 @@ class VideoSignalConsumer(AsyncWebsocketConsumer):
                 }
             )
             await self.channel_layer.group_discard(self.room_group_name, self.channel_name)
+
+    async def _notify_new_message(self, message_text):
+        peer_id = await self._get_peer_id()
+        if not peer_id:
+            return
+
+        group_name = f'user_notifications_{peer_id}'
+        await self.channel_layer.group_send(
+            group_name,
+            {
+                'type': 'user_notification',
+                'payload': {
+                    'type': 'new_chat_message',
+                    'appointment_id': self.appointment_id,
+                    'sender_name': self.user['full_name'] if 'full_name' in self.user else 'Someone',
+                    'message': message_text,
+                }
+            }
+        )
 
     async def _notify_peer_presence(self, is_joining):
         peer_id = await self._get_peer_id()
@@ -279,9 +291,8 @@ class VideoSignalConsumer(AsyncWebsocketConsumer):
             if self.user['role'] == 'doctor':
                 return str(appt.patient_id)
             else:
-                # In appointment model, doctor is a ForeignKey to DoctorProfile.
-                # We need the user_id of the doctor.
-                return str(appt.doctor.user_id)
+                # appt.doctor_id refers to DoctorProfile.id, which is User.id
+                return str(appt.doctor_id)
         except Exception:
             return None
 
@@ -316,7 +327,7 @@ class VideoSignalConsumer(AsyncWebsocketConsumer):
             payload = jwt.decode(token, signing_key.key, algorithms=['ES256', 'RS256'], audience='authenticated')
             from accounts.models import User
             db_user = User.objects.get(id=payload['sub'])
-            return {'id': db_user.id, 'role': db_user.role}
+            return {'id': db_user.id, 'role': db_user.role, 'full_name': db_user.full_name}
         except Exception:
             return None
 
