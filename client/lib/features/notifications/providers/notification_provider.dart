@@ -4,23 +4,62 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 import 'package:go_router/go_router.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../core/supabase_client.dart';
 import '../../../core/config.dart';
 
+// Stream of auth state changes to make notifications reactive to login/logout
+final authStateProvider = StreamProvider<AuthState>((ref) {
+  return supabase.auth.onAuthStateChange;
+});
+
 final notificationSocketProvider = StreamProvider.autoDispose<Map<String, dynamic>>((ref) {
-  final session = supabase.auth.currentSession;
-  if (session == null) return const Stream.empty();
+  // Watch auth state - provider will restart when user logs in/out
+  final authState = ref.watch(authStateProvider).value;
+  final session = authState?.session ?? supabase.auth.currentSession;
+
+  if (session == null) {
+    debugPrint('NotificationSocket: No active session, socket standby.');
+    return const Stream.empty();
+  }
 
   final token = session.accessToken;
-  final channel = WebSocketChannel.connect(
-    Uri.parse('${Config.wsBaseUrl}/ws/notifications/?token=$token'),
+  final wsUrl = '${Config.wsBaseUrl}/ws/notifications/?token=$token';
+  debugPrint('NotificationSocket: Connecting to $wsUrl');
+
+  final channel = WebSocketChannel.connect(Uri.parse(wsUrl));
+
+  // Handle potential connection errors
+  final streamController = StreamController<Map<String, dynamic>>();
+
+  final subscription = channel.stream.listen(
+    (event) {
+      debugPrint('NotificationSocket: Raw data: $event');
+      try {
+        final decoded = jsonDecode(event) as Map<String, dynamic>;
+        streamController.add(decoded);
+      } catch (e) {
+        debugPrint('NotificationSocket: Decode error: $e');
+      }
+    },
+    onError: (error) {
+      debugPrint('NotificationSocket: Connection error: $error');
+      streamController.addError(error);
+    },
+    onDone: () {
+      debugPrint('NotificationSocket: Connection closed by server');
+      streamController.close();
+    },
   );
 
   ref.onDispose(() {
+    debugPrint('NotificationSocket: Disposing provider, closing channel');
+    subscription.cancel();
     channel.sink.close();
+    streamController.close();
   });
 
-  return channel.stream.map((event) => jsonDecode(event) as Map<String, dynamic>);
+  return streamController.stream;
 });
 
 // A notifier to keep track of real-time peer presence events and handle in-app toasts
@@ -29,22 +68,29 @@ class NotificationManager extends StateNotifier<Map<String, bool>> {
   NotificationManager(this.ref) : super({});
 
   void handleEvent(Map<String, dynamic> data, BuildContext? context) {
-    if (context == null) return;
-
+    debugPrint('NotificationManager: Event processing started: $data');
     final String type = data['type'] ?? '';
 
     if (type == 'video_presence') {
-      final apptId = data['appointment_id'];
-      final isPresent = data['is_present'] as bool;
-      final role = data['role'] ?? 'someone';
-      state = {...state, apptId: isPresent};
+      final String? apptId = data['appointment_id']?.toString();
+      final bool isPresent = data['is_present'] == true;
+      final String role = data['role'] ?? 'someone';
+
+      if (apptId == null) return;
+
+      // Update state regardless of context so UI dots work
+      setPresence(apptId, isPresent);
+      debugPrint('NotificationManager: Presence updated for $apptId: $isPresent');
+
+      if (context == null) {
+        debugPrint('NotificationManager: Context null, toast suppressed');
+        return;
+      }
 
       final messenger = ScaffoldMessenger.of(context);
 
       if (isPresent) {
-        // Show temporary In-App Toast for Call Join
         final roleTitle = role[0].toUpperCase() + role.substring(1);
-
         messenger.clearSnackBars();
         messenger.showSnackBar(
           SnackBar(
@@ -73,7 +119,6 @@ class NotificationManager extends StateNotifier<Map<String, bool>> {
           ),
         );
       } else {
-        // If they left, hide any active "ready for call" snackbars immediately
         messenger.clearSnackBars();
       }
     }
@@ -81,12 +126,13 @@ class NotificationManager extends StateNotifier<Map<String, bool>> {
     else if (type == 'new_chat_message') {
       final String senderName = data['sender_name'] ?? 'Someone';
       final String message = data['message'] ?? '';
-      final apptId = data['appointment_id'];
-      final messenger = ScaffoldMessenger.of(context);
+      final String? apptId = data['appointment_id']?.toString();
 
+      if (context == null) return;
+
+      final messenger = ScaffoldMessenger.of(context);
       messenger.clearSnackBars();
 
-      // Show In-App Toast
       messenger.showSnackBar(
         SnackBar(
           content: Column(
@@ -118,7 +164,10 @@ class NotificationManager extends StateNotifier<Map<String, bool>> {
   }
 
   void setPresence(String appointmentId, bool isPresent) {
-    state = {...state, appointmentId: isPresent};
+    if (state[appointmentId] == isPresent) return;
+    final newState = Map<String, bool>.from(state);
+    newState[appointmentId] = isPresent;
+    state = newState;
   }
 }
 

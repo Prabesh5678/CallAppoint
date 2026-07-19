@@ -13,23 +13,26 @@ final myAppointmentsProvider = FutureProvider.autoDispose<List<Appointment>>((
 });
 
 final peerPresenceProvider = StreamProvider.family.autoDispose<bool, String>((ref, appointmentId) async* {
-  // 1. Initial fetch from API
-  bool currentStatus = false;
-  try {
-    final response = await DioClient.instance.get('/chat/$appointmentId/video-presence/');
-    currentStatus = response.data['is_present'] as bool;
-    yield currentStatus;
-  } catch (_) {
-    yield false;
+  // 1. Watch ONLY the status for this specific appointment to avoid unnecessary rebuilds
+  final socketStatus = ref.watch(notificationManagerProvider.select((map) => map[appointmentId]));
+
+  if (socketStatus != null) {
+    yield socketStatus;
+    return; // Trust the socket/manager state if it exists
   }
 
-  // 2. Listen to real-time events from notification socket
-  final presenceMap = ref.watch(notificationManagerProvider);
-  if (presenceMap.containsKey(appointmentId)) {
-    yield presenceMap[appointmentId]!;
-  } else {
-    // If no new event has arrived, keep yielding the last known status
-    yield currentStatus;
+  // 2. Fallback to initial fetch if socket hasn't received an event yet
+  try {
+    final response = await DioClient.instance.get('/chat/$appointmentId/video-presence/');
+    final isPresent = response.data['is_present'] as bool;
+
+    // Sync the global manager so tabs/other UI can see this state
+    // We use ref.read to avoid creating a circular dependency
+    ref.read(notificationManagerProvider.notifier).setPresence(appointmentId, isPresent);
+
+    yield isPresent;
+  } catch (_) {
+    yield false;
   }
 });
 

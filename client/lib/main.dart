@@ -22,11 +22,15 @@ class CallAppointApp extends ConsumerWidget {
 
     // Listen to global notifications
     ref.listen(notificationSocketProvider, (previous, next) {
+      debugPrint('CallAppointApp: notificationSocketProvider state changed: $next');
       if (next is AsyncData<Map<String, dynamic>>) {
         final data = next.value;
+        debugPrint('CallAppointApp: Emitting event to manager: $data');
         // We get context from the router's configuration
         final context = router.routerDelegate.navigatorKey.currentContext;
         ref.read(notificationManagerProvider.notifier).handleEvent(data, context);
+      } else if (next is AsyncError) {
+        debugPrint('CallAppointApp: notificationSocketProvider error: ${next.error}');
       }
     });
 

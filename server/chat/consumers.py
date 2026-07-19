@@ -12,7 +12,7 @@ _jwks_client = PyJWKClient(settings.SUPABASE_JWKS_URL)
 
 class ChatConsumer(AsyncWebsocketConsumer):
     async def connect(self):
-        self.appointment_id = self.scope['url_route']['kwargs']['appointment_id']
+        self.appointment_id = str(self.scope['url_route']['kwargs']['appointment_id'])
         self.room_group_name = f'chat_{self.appointment_id}'
 
         token = self._get_token_from_query()
@@ -32,7 +32,6 @@ class ChatConsumer(AsyncWebsocketConsumer):
 
     async def disconnect(self, close_code):
         if hasattr(self, 'room_group_name'):
-            # Notify the other party that we are leaving
             await self.channel_layer.group_send(
                 self.room_group_name,
                 {
@@ -62,50 +61,6 @@ class ChatConsumer(AsyncWebsocketConsumer):
             }
         )
 
-    async def _notify_peer_presence(self, is_joining):
-        peer_id = await self._get_peer_id()
-        if not peer_id:
-            return
-
-        # Explicitly broadcast to the peer's unique group
-        group_name = f'user_notifications_{peer_id}'
-        await self.channel_layer.group_send(
-            group_name,
-            {
-                'type': 'user_notification',
-                'payload': {
-                    'type': 'video_presence',
-                    'appointment_id': str(self.appointment_id),
-                    'role': self.user['role'],
-                    'is_present': is_joining
-                }
-            }
-        )
-
-        # 2. Push Notification (FCM) if joining
-        if is_joining:
-            await self._send_push_notification(peer_id)
-
-    async def _send_push_notification(self, peer_id):
-        from notifications.services import notify_user
-
-        # We run this in a thread to not block the consumer
-        def trigger_push():
-            role_name = "Doctor" if self.user['role'] == 'doctor' else "Patient"
-            notify_user(
-                user_id=peer_id,
-                type='general',
-                title='Call is ready!',
-                body=f'Your {role_name} has joined the video room and is waiting for you.',
-                data={
-                    'appointment_id': self.appointment_id,
-                    'click_action': 'FLUTTER_NOTIFICATION_CLICK',
-                }
-            )
-
-        import threading
-        threading.Thread(target=trigger_push).start()
-
     @database_sync_to_async
     def _get_peer_id(self):
         from appointments.models import Appointment
@@ -114,7 +69,6 @@ class ChatConsumer(AsyncWebsocketConsumer):
             if self.user['role'] == 'doctor':
                 return str(appt.patient_id)
             else:
-                # appt.doctor_id refers to DoctorProfile.id, which is User.id
                 return str(appt.doctor_id)
         except Exception:
             return None
@@ -126,8 +80,6 @@ class ChatConsumer(AsyncWebsocketConsumer):
             return
 
         msg = await self._save_message(self.appointment_id, self.user['id'], message_text)
-
-        # Notify the other party via their personal notification channel
         await self._notify_new_message(message_text)
 
         await self.channel_layer.group_send(
@@ -184,7 +136,7 @@ class ChatConsumer(AsyncWebsocketConsumer):
 
 class VideoSignalConsumer(AsyncWebsocketConsumer):
     async def connect(self):
-        self.appointment_id = self.scope['url_route']['kwargs']['appointment_id']
+        self.appointment_id = str(self.scope['url_route']['kwargs']['appointment_id'])
         self.room_group_name = f'video_{self.appointment_id}'
 
         token = self._get_token_from_query()
@@ -202,23 +154,21 @@ class VideoSignalConsumer(AsyncWebsocketConsumer):
         await self.channel_layer.group_add(self.room_group_name, self.channel_name)
         await self.accept()
 
-        # Track presence in cache IMMEDIATELY upon connection
+        # Track presence in cache
         cache_key = f"video_presence_{self.appointment_id}_{self.user['role']}"
         cache.set(cache_key, True, timeout=3600)
+        print(f"DEBUG: Presence ON for {self.user['role']} in appt {self.appointment_id}")
 
-        # Notify the other party via their personal notification channel
         await self._notify_peer_presence(is_joining=True)
 
     async def disconnect(self, close_code):
         if hasattr(self, 'room_group_name'):
-            # Clear presence in cache
             cache_key = f"video_presence_{self.appointment_id}_{self.user['role']}"
             cache.delete(cache_key)
+            print(f"DEBUG: Presence OFF for {self.user['role']} in appt {self.appointment_id}")
 
-            # Notify the other party via their personal notification channel
             await self._notify_peer_presence(is_joining=False)
 
-            # Notify the other party that we are leaving
             await self.channel_layer.group_send(
                 self.room_group_name,
                 {
@@ -229,31 +179,11 @@ class VideoSignalConsumer(AsyncWebsocketConsumer):
             )
             await self.channel_layer.group_discard(self.room_group_name, self.channel_name)
 
-    async def _notify_new_message(self, message_text):
-        peer_id = await self._get_peer_id()
-        if not peer_id:
-            return
-
-        group_name = f'user_notifications_{peer_id}'
-        await self.channel_layer.group_send(
-            group_name,
-            {
-                'type': 'user_notification',
-                'payload': {
-                    'type': 'new_chat_message',
-                    'appointment_id': self.appointment_id,
-                    'sender_name': self.user['full_name'] if 'full_name' in self.user else 'Someone',
-                    'message': message_text,
-                }
-            }
-        )
-
     async def _notify_peer_presence(self, is_joining):
         peer_id = await self._get_peer_id()
         if not peer_id:
             return
 
-        # Explicitly broadcast to the peer's unique group
         group_name = f'user_notifications_{peer_id}'
         await self.channel_layer.group_send(
             group_name,
@@ -261,21 +191,19 @@ class VideoSignalConsumer(AsyncWebsocketConsumer):
                 'type': 'user_notification',
                 'payload': {
                     'type': 'video_presence',
-                    'appointment_id': str(self.appointment_id),
+                    'appointment_id': self.appointment_id,
                     'role': self.user['role'],
                     'is_present': is_joining
                 }
             }
         )
 
-        # 2. Push Notification (FCM) if joining
+        # FCM Push only on joining
         if is_joining:
             await self._send_push_notification(peer_id)
 
     async def _send_push_notification(self, peer_id):
         from notifications.services import notify_user
-
-        # We run this in a thread to not block the consumer
         def trigger_push():
             role_name = "Doctor" if self.user['role'] == 'doctor' else "Patient"
             notify_user(
@@ -288,7 +216,6 @@ class VideoSignalConsumer(AsyncWebsocketConsumer):
                     'click_action': 'FLUTTER_NOTIFICATION_CLICK',
                 }
             )
-
         import threading
         threading.Thread(target=trigger_push).start()
 
@@ -300,14 +227,12 @@ class VideoSignalConsumer(AsyncWebsocketConsumer):
             if self.user['role'] == 'doctor':
                 return str(appt.patient_id)
             else:
-                # appt.doctor_id refers to DoctorProfile.id, which is User.id
                 return str(appt.doctor_id)
         except Exception:
             return None
 
     async def receive(self, text_data):
         data = json.loads(text_data)
-        # just relay to everyone else in the room — sender excluded on the client side
         await self.channel_layer.group_send(
             self.room_group_name,
             {
@@ -318,7 +243,6 @@ class VideoSignalConsumer(AsyncWebsocketConsumer):
         )
 
     async def signal_message(self, event):
-        # don't echo back to the sender
         if event['sender_id'] != str(self.user['id']):
             await self.send(text_data=json.dumps(event['payload']))
 

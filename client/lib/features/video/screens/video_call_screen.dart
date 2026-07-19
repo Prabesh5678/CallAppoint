@@ -303,50 +303,6 @@ class _VideoCallScreenState extends ConsumerState<VideoCallScreen> {
                         ),
                 ),
 
-                // Diagnostic Stats Button & Overlay
-                if (_remoteJoined)
-                  Positioned(
-                    top: 100,
-                    left: 16,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        GestureDetector(
-                          onLongPressStart: (_) => setState(() => _showStatsOverlay = true),
-                          onLongPressEnd: (_) => setState(() => _showStatsOverlay = false),
-                          child: Container(
-                            padding: const EdgeInsets.all(6),
-                            decoration: const BoxDecoration(color: Colors.white24, shape: BoxShape.circle),
-                            child: const Icon(Icons.info_outline, color: Colors.white70, size: 20),
-                          ),
-                        ),
-                        if (_showStatsOverlay) ...[
-                          const SizedBox(height: 8),
-                          Container(
-                            padding: const EdgeInsets.all(10),
-                            decoration: BoxDecoration(
-                              color: Colors.black87,
-                              borderRadius: BorderRadius.circular(8),
-                              border: Border.all(color: Colors.white24),
-                            ),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Text('Method: $_connectionMethod',
-                                    style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
-                                Text('Latency: ${_latencyMs.toStringAsFixed(0)} ms',
-                                    style: const TextStyle(color: Colors.white70, fontSize: 11)),
-                                Text('Bandwidth: ${_bitrateMbps.toStringAsFixed(2)} Mbps',
-                                    style: const TextStyle(color: Colors.white70, fontSize: 11)),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ],
-                    ),
-                  ),
-
                 // Local Video Preview
                 if (_camEnabled)
                   Positioned(
@@ -360,31 +316,75 @@ class _VideoCallScreenState extends ConsumerState<VideoCallScreen> {
                     ),
                   ),
 
-                // Control Buttons
+                // Control Buttons & Diagnostic Overlay
                 Positioned(
                   bottom: 40,
                   left: 0,
                   right: 0,
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
                     children: [
-                      _ControlButton(
-                        icon: _micEnabled ? Icons.mic : Icons.mic_off,
-                        color: _micEnabled ? Colors.white24 : Colors.red,
-                        onPressed: _toggleMic,
-                      ),
-                      const SizedBox(width: 20),
-                      FloatingActionButton(
-                        heroTag: 'hangup',
-                        backgroundColor: Colors.red,
-                        onPressed: _hangUp,
-                        child: const Icon(Icons.call_end),
-                      ),
-                      const SizedBox(width: 20),
-                      _ControlButton(
-                        icon: _camEnabled ? Icons.videocam : Icons.videocam_off,
-                        color: _camEnabled ? Colors.white24 : Colors.red,
-                        onPressed: _toggleCam,
+                      if (_showStatsOverlay)
+                        Container(
+                          margin: const EdgeInsets.only(bottom: 12),
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: Colors.black87,
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: Colors.white24),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text('Method: $_connectionMethod',
+                                  style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold)),
+                              const SizedBox(height: 4),
+                              Text('Latency: ${_latencyMs.toStringAsFixed(0)} ms',
+                                  style: const TextStyle(color: Colors.white70, fontSize: 12)),
+                              Text('Bandwidth: ${_bitrateMbps.toStringAsFixed(2)} Mbps',
+                                  style: const TextStyle(color: Colors.white70, fontSize: 12)),
+                            ],
+                          ),
+                        ),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          // Diagnostic Button
+                          MouseRegion(
+                            onEnter: (_) => setState(() => _showStatsOverlay = true),
+                            onExit: (_) => setState(() => _showStatsOverlay = false),
+                            child: GestureDetector(
+                              onTap: () => setState(() => _showStatsOverlay = !_showStatsOverlay),
+                              onLongPressStart: (_) => setState(() => _showStatsOverlay = true),
+                              onLongPressEnd: (_) => setState(() => _showStatsOverlay = false),
+                              child: CircleAvatar(
+                                radius: 24,
+                                backgroundColor: _showStatsOverlay ? Colors.blueAccent : Colors.white12,
+                                child: const Icon(Icons.analytics_outlined, color: Colors.white, size: 20),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 16),
+                          _ControlButton(
+                            icon: _micEnabled ? Icons.mic : Icons.mic_off,
+                            color: _micEnabled ? Colors.white24 : Colors.red,
+                            onPressed: _toggleMic,
+                          ),
+                          const SizedBox(width: 16),
+                          FloatingActionButton(
+                            heroTag: 'hangup',
+                            backgroundColor: Colors.red,
+                            onPressed: _hangUp,
+                            child: const Icon(Icons.call_end),
+                          ),
+                          const SizedBox(width: 16),
+                          _ControlButton(
+                            icon: _camEnabled ? Icons.videocam : Icons.videocam_off,
+                            color: _camEnabled ? Colors.white24 : Colors.red,
+                            onPressed: _toggleCam,
+                          ),
+                        ],
                       ),
                     ],
                   ),
