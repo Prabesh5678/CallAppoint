@@ -94,7 +94,7 @@ class ChatConsumer(AsyncWebsocketConsumer):
             role_name = "Doctor" if self.user['role'] == 'doctor' else "Patient"
             notify_user(
                 user_id=peer_id,
-                type='call_waiting',
+                type='general',
                 title='Call is ready!',
                 body=f'Your {role_name} has joined the video room and is waiting for you.',
                 data={
@@ -280,7 +280,7 @@ class VideoSignalConsumer(AsyncWebsocketConsumer):
             role_name = "Doctor" if self.user['role'] == 'doctor' else "Patient"
             notify_user(
                 user_id=peer_id,
-                type='call_waiting',
+                type='general',
                 title='Call is ready!',
                 body=f'Your {role_name} has joined the video room and is waiting for you.',
                 data={

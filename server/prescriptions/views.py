@@ -6,6 +6,7 @@ from django.db import transaction
 from accounts.permissions import IsDoctor
 from .models import Prescription, PrescriptionItem
 from .serializers import PrescriptionSerializer, PrescriptionCreateSerializer
+from notifications.services import notify_user
 
 
 class CreatePrescriptionView(generics.CreateAPIView):
@@ -33,14 +34,16 @@ class CreatePrescriptionView(generics.CreateAPIView):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         self.perform_create(serializer)
-        output = PrescriptionSerializer(self.instance)
-        return Response(output.data, status=201)
+
         notify_user(
-            user_id=prescription.patient_id, type='prescription_ready',
+            user_id=self.instance.patient_id, type='prescription_ready',
             title='New prescription available',
             body=f'Dr. {self.request.user.db_user.full_name} added a new prescription',
-            data={'prescription_id': str(prescription.id)},
+            data={'prescription_id': str(self.instance.id)},
         )
+
+        output = PrescriptionSerializer(self.instance)
+        return Response(output.data, status=201)
 
 
 class MyPrescriptionsView(generics.ListAPIView):
