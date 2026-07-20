@@ -1,14 +1,16 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../shared/widgets/theme_toggle_button.dart';
 import 'admin_dashboard_screen.dart';
 import 'admin_dio_client.dart';
 
-class AdminLoginScreen extends StatefulWidget {
+class AdminLoginScreen extends ConsumerStatefulWidget {
   const AdminLoginScreen({super.key});
   @override
-  State<AdminLoginScreen> createState() => _AdminLoginScreenState();
+  ConsumerState<AdminLoginScreen> createState() => _AdminLoginScreenState();
 }
 
-class _AdminLoginScreenState extends State<AdminLoginScreen> {
+class _AdminLoginScreenState extends ConsumerState<AdminLoginScreen> {
   final _userController = TextEditingController();
   final _passController = TextEditingController();
   bool _loading = false;
@@ -46,13 +48,22 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      extendBodyBehindAppBar: true,
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        actions: [
+          const ThemeToggleButton(),
+          const SizedBox(width: 8),
+        ],
+      ),
       body: Container(
         decoration: BoxDecoration(
           gradient: LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
             colors: [
-              Theme.of(context).colorScheme.primaryContainer.withOpacity(0.3),
+              Theme.of(context).colorScheme.surfaceVariant,
               Theme.of(context).colorScheme.surface,
             ],
           ),
@@ -62,7 +73,7 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
             constraints: const BoxConstraints(maxWidth: 450),
             child: Card(
               elevation: 8,
-              shadowColor: Colors.black26,
+              shadowColor: Theme.of(context).colorScheme.shadow.withOpacity(0.1),
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
               child: SingleChildScrollView(
                 padding: const EdgeInsets.all(40),

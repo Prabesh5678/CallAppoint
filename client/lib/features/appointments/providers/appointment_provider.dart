@@ -4,32 +4,35 @@ import '../../../core/dio_client.dart';
 import '../models/appointment.dart';
 import '../../notifications/providers/notification_provider.dart';
 
-final myAppointmentsProvider = FutureProvider.autoDispose<List<Appointment>>((
-  ref,
-) async {
-  final response = await DioClient.instance.get('/appointments/mine/');
-  final list = response.data as List;
-  return list.map((json) => Appointment.fromJson(json)).toList();
-});
+class MyAppointmentsNotifier extends AutoDisposeAsyncNotifier<List<Appointment>> {
+  @override
+  FutureOr<List<Appointment>> build() async {
+    final response = await DioClient.instance.get('/appointments/mine/');
+    final list = response.data as List;
+    return list.map((json) => Appointment.fromJson(json)).toList();
+  }
+
+  void setAppointments(List<Appointment> list) {
+    state = AsyncData(list);
+  }
+}
+
+final myAppointmentsProvider = AsyncNotifierProvider.autoDispose<MyAppointmentsNotifier, List<Appointment>>(
+  () => MyAppointmentsNotifier(),
+);
 
 final peerPresenceProvider = StreamProvider.family.autoDispose<bool, String>((ref, appointmentId) async* {
-  // 1. Watch ONLY the status for this specific appointment to avoid unnecessary rebuilds
   final socketStatus = ref.watch(notificationManagerProvider.select((map) => map[appointmentId]));
 
   if (socketStatus != null) {
     yield socketStatus;
-    return; // Trust the socket/manager state if it exists
+    return;
   }
 
-  // 2. Fallback to initial fetch if socket hasn't received an event yet
   try {
     final response = await DioClient.instance.get('/chat/$appointmentId/video-presence/');
     final isPresent = response.data['is_present'] as bool;
-
-    // Sync the global manager so tabs/other UI can see this state
-    // We use ref.read to avoid creating a circular dependency
     ref.read(notificationManagerProvider.notifier).setPresence(appointmentId, isPresent);
-
     yield isPresent;
   } catch (_) {
     yield false;
@@ -37,19 +40,65 @@ final peerPresenceProvider = StreamProvider.family.autoDispose<bool, String>((re
 });
 
 class AppointmentActions {
+  final Ref ref;
+  AppointmentActions(this.ref);
+
   Future<void> respond(String appointmentId, String action) async {
     await DioClient.instance.post(
       '/appointments/$appointmentId/respond/',
       data: {'action': action},
     );
+    ref.invalidate(myAppointmentsProvider);
   }
 
-  Future<void> cancel(String appointmentId, {String? reason}) async {
-    await DioClient.instance.post(
-      '/appointments/$appointmentId/cancel/',
-      data: {'reason': reason ?? ''},
+  Future<void> cancelWithUndo({
+    required String appointmentId,
+    String? reason,
+    required void Function(Future<void> Function() onUndo, void Function() dismiss) showUndoSnackBar,
+  }) async {
+    final previousState = ref.read(myAppointmentsProvider).valueOrNull;
+    if (previousState == null) return;
+
+    final updatedList = previousState.where((a) => a.id != appointmentId).toList();
+    ref.read(myAppointmentsProvider.notifier).setAppointments(updatedList);
+
+    bool wasUndone = false;
+    final userActionCompleter = Completer<void>();
+
+    showUndoSnackBar(
+      () async {
+        if (userActionCompleter.isCompleted) return;
+        wasUndone = true;
+        ref.read(myAppointmentsProvider.notifier).setAppointments(previousState);
+        userActionCompleter.complete();
+      },
+      () {
+        if (!userActionCompleter.isCompleted) userActionCompleter.complete();
+      },
     );
+
+    // Independent fallback timer
+    final timer = Timer(const Duration(milliseconds: 4500), () {
+      if (!userActionCompleter.isCompleted) {
+        userActionCompleter.complete();
+      }
+    });
+
+    await userActionCompleter.future;
+    timer.cancel();
+
+    if (!wasUndone) {
+      try {
+        await DioClient.instance.post(
+          '/appointments/$appointmentId/cancel/',
+          data: {'reason': reason ?? ''},
+        );
+      } catch (e) {
+        ref.read(myAppointmentsProvider.notifier).setAppointments(previousState);
+        rethrow;
+      }
+    }
   }
 }
 
-final appointmentActionsProvider = Provider((ref) => AppointmentActions());
+final appointmentActionsProvider = Provider((ref) => AppointmentActions(ref));

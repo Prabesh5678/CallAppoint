@@ -1,14 +1,17 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../shared/widgets/theme_toggle_button.dart';
 import 'admin_dio_client.dart';
 import 'admin_login_screen.dart';
 
-class AdminDashboardScreen extends StatefulWidget {
+class AdminDashboardScreen extends ConsumerStatefulWidget {
   const AdminDashboardScreen({super.key});
   @override
-  State<AdminDashboardScreen> createState() => _AdminDashboardScreenState();
+  ConsumerState<AdminDashboardScreen> createState() => _AdminDashboardScreenState();
 }
 
-class _AdminDashboardScreenState extends State<AdminDashboardScreen> with SingleTickerProviderStateMixin {
+class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> with SingleTickerProviderStateMixin {
   late TabController _tabController;
   int _selectedIndex = 0;
 
@@ -57,7 +60,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to load data: $e'), backgroundColor: Colors.red),
+          SnackBar(content: Text('Failed to load data: $e'), backgroundColor: Theme.of(context).colorScheme.error),
         );
       }
       setState(() => _loading = false);
@@ -70,7 +73,17 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
       if (_selectedSpecialtyId == null) {
         _filteredDoctors = approved;
       } else {
-        final specName = _allSpecialties.firstWhere((s) => s['id'] == _selectedSpecialtyId)['name'];
+        final specialty = _allSpecialties.cast<Map<String, dynamic>?>().firstWhere(
+          (s) => s?['id'] == _selectedSpecialtyId,
+          orElse: () => null,
+        );
+
+        if (specialty == null) {
+          _filteredDoctors = approved;
+          return;
+        }
+
+        final specName = specialty['name'];
         _filteredDoctors = approved.where((d) {
           final List specs = d['specialties'] ?? [];
           return specs.contains(specName);
@@ -133,12 +146,12 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
         actions: [
           TextButton(onPressed: () => Navigator.pop(context), child: const Text("Cancel")),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            style: ElevatedButton.styleFrom(backgroundColor: Theme.of(context).colorScheme.error),
             onPressed: () {
               Navigator.pop(context);
               _rejectDoctor(id, reason);
             },
-            child: const Text("Reject", style: TextStyle(color: Colors.white)),
+            child: Text("Reject", style: TextStyle(color: Theme.of(context).colorScheme.onError)),
           ),
         ],
       ),
@@ -154,9 +167,9 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
         actions: [
           TextButton(onPressed: () => Navigator.pop(context, false), child: const Text("Cancel")),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            style: ElevatedButton.styleFrom(backgroundColor: Theme.of(context).colorScheme.error),
             onPressed: () => Navigator.pop(context, true),
-            child: const Text("Delete"),
+            child: Text("Delete", style: TextStyle(color: Theme.of(context).colorScheme.onError)),
           ),
         ],
       ),
@@ -164,7 +177,8 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
   }
 
   Future<void> _removeUser(String id, {required bool isDoctor}) async {
-    if (!await _confirmDelete(isDoctor ? "this doctor" : "this patient")) return;
+    final title = isDoctor ? "this doctor" : "this patient";
+    if (!await _confirmDelete(title)) return;
 
     final originalPatients = List.from(_allPatients);
     final originalDoctors = List.from(_allDoctors);
@@ -178,14 +192,49 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
       _applyFilters();
     });
 
-    try {
-      await AdminDioClient.instance.delete('/users/$id/');
-    } catch (e) {
-      setState(() {
-        _allPatients = originalPatients;
-        _allDoctors = originalDoctors;
-        _applyFilters();
-      });
+    bool wasUndone = false;
+    final messenger = ScaffoldMessenger.of(context);
+    messenger.clearSnackBars();
+
+    final userActionCompleter = Completer<void>();
+
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text("${isDoctor ? 'Doctor' : 'Patient'} removed"),
+        action: SnackBarAction(
+          label: "Undo",
+          onPressed: () {
+            if (userActionCompleter.isCompleted) return;
+            wasUndone = true;
+            setState(() {
+              _allPatients = originalPatients;
+              _allDoctors = originalDoctors;
+              _applyFilters();
+            });
+            userActionCompleter.complete();
+          },
+        ),
+        duration: const Duration(seconds: 4),
+      ),
+    ).closed.then((reason) {
+      if (reason != SnackBarClosedReason.action && !userActionCompleter.isCompleted) {
+        userActionCompleter.complete();
+      }
+    });
+
+    await userActionCompleter.future;
+
+    if (!wasUndone) {
+      try {
+        await AdminDioClient.instance.delete('/users/$id/');
+      } catch (e) {
+        setState(() {
+          _allPatients = originalPatients;
+          _allDoctors = originalDoctors;
+          _applyFilters();
+        });
+        if (mounted) messenger.showSnackBar(SnackBar(content: Text('Failed to delete: $e')));
+      }
     }
   }
 
@@ -213,11 +262,44 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
   Future<void> _deleteSpecialty(String id, String name) async {
     if (!await _confirmDelete("the division '$name'")) return;
     final original = List.from(_allSpecialties);
+
     setState(() => _allSpecialties.removeWhere((s) => s['id'] == id));
-    try {
-      await AdminDioClient.instance.delete('/specialties/$id/');
-    } catch (e) {
-      setState(() => _allSpecialties = original);
+
+    bool wasUndone = false;
+    final messenger = ScaffoldMessenger.of(context);
+    messenger.clearSnackBars();
+
+    final userActionCompleter = Completer<void>();
+
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text("Division '$name' removed"),
+        action: SnackBarAction(
+          label: "Undo",
+          onPressed: () {
+            if (userActionCompleter.isCompleted) return;
+            wasUndone = true;
+            setState(() => _allSpecialties = original);
+            userActionCompleter.complete();
+          },
+        ),
+        duration: const Duration(seconds: 4),
+      ),
+    ).closed.then((reason) {
+      if (reason != SnackBarClosedReason.action && !userActionCompleter.isCompleted) {
+        userActionCompleter.complete();
+      }
+    });
+
+    await userActionCompleter.future;
+
+    if (!wasUndone) {
+      try {
+        await AdminDioClient.instance.delete('/specialties/$id/');
+      } catch (e) {
+        setState(() => _allSpecialties = original);
+        if (mounted) messenger.showSnackBar(SnackBar(content: Text('Failed: $e')));
+      }
     }
   }
 
@@ -242,14 +324,15 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
   }
 
   Widget _buildRequestsTab() {
+    final colorScheme = Theme.of(context).colorScheme;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _buildSectionHeader('Verification Requests'),
         Expanded(
           child: _pendingRequests.isEmpty
-              ? const Center(
-                  child: Text('Currently no pending requests', style: TextStyle(color: Colors.grey, fontSize: 16)),
+              ? Center(
+                  child: Text('Currently no pending requests', style: TextStyle(color: colorScheme.onSurfaceVariant, fontSize: 16)),
                 )
               : ListView.builder(
                   itemCount: _pendingRequests.length,
@@ -260,7 +343,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
                       elevation: 0,
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(12),
-                        side: BorderSide(color: Colors.grey.shade200),
+                        side: BorderSide(color: colorScheme.outlineVariant),
                       ),
                       child: ListTile(
                         contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
@@ -272,7 +355,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
                             ElevatedButton(
                               onPressed: () => _approveDoctor(doc['id']),
                               style: ElevatedButton.styleFrom(
-                                backgroundColor: Colors.green.shade50,
+                                backgroundColor: Colors.green.withOpacity(0.1),
                                 foregroundColor: Colors.green,
                                 elevation: 0,
                               ),
@@ -296,6 +379,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
   }
 
   Widget _buildDoctorsTab() {
+    final colorScheme = Theme.of(context).colorScheme;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -324,7 +408,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
         ),
         Expanded(
           child: _filteredDoctors.isEmpty
-              ? const Center(child: Text('No doctors found', style: TextStyle(color: Colors.grey)))
+              ? Center(child: Text('No doctors found', style: TextStyle(color: colorScheme.onSurfaceVariant)))
               : ListView.builder(
                   itemCount: _filteredDoctors.length,
                   itemBuilder: (context, i) {
@@ -335,14 +419,14 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
                       elevation: 0,
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(12),
-                        side: BorderSide(color: Colors.grey.shade200),
+                        side: BorderSide(color: colorScheme.outlineVariant),
                       ),
                       child: ListTile(
                         contentPadding: const EdgeInsets.symmetric(horizontal: 20),
                         title: Text(doc['full_name'] ?? '', style: const TextStyle(fontWeight: FontWeight.bold)),
                         subtitle: Text('${specs.join(", ")} · ${doc['license_number']}'),
                         trailing: IconButton(
-                          icon: const Icon(Icons.delete_outline, color: Colors.red),
+                          icon: Icon(Icons.delete_outline, color: colorScheme.error),
                           onPressed: () => _removeUser(doc['id'], isDoctor: true),
                         ),
                       ),
@@ -355,13 +439,14 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
   }
 
   Widget _buildPatientsTab() {
+    final colorScheme = Theme.of(context).colorScheme;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _buildSectionHeader('Registered Patients'),
         Expanded(
           child: _allPatients.isEmpty
-              ? const Center(child: Text('No patients registered yet', style: TextStyle(color: Colors.grey, fontSize: 16)))
+              ? Center(child: Text('No patients registered yet', style: TextStyle(color: colorScheme.onSurfaceVariant, fontSize: 16)))
               : ListView.builder(
                   itemCount: _allPatients.length,
                   itemBuilder: (context, i) {
@@ -371,14 +456,14 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
                       elevation: 0,
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(12),
-                        side: BorderSide(color: Colors.grey.shade200),
+                        side: BorderSide(color: colorScheme.outlineVariant),
                       ),
                       child: ListTile(
                         contentPadding: const EdgeInsets.symmetric(horizontal: 20),
                         title: Text(p['full_name'] ?? '', style: const TextStyle(fontWeight: FontWeight.bold)),
                         subtitle: Text(p['phone'] ?? 'No phone'),
                         trailing: IconButton(
-                          icon: const Icon(Icons.delete_outline, color: Colors.red),
+                          icon: Icon(Icons.delete_outline, color: colorScheme.error),
                           onPressed: () => _removeUser(p['id'], isDoctor: false),
                         ),
                       ),
@@ -391,6 +476,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
   }
 
   Widget _buildDivisionsTab() {
+    final colorScheme = Theme.of(context).colorScheme;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -429,7 +515,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
         ),
         Expanded(
           child: _allSpecialties.isEmpty
-              ? const Center(child: Text('No divisions added yet', style: TextStyle(color: Colors.grey)))
+              ? Center(child: Text('No divisions added yet', style: TextStyle(color: colorScheme.onSurfaceVariant)))
               : ListView.builder(
                   itemCount: _allSpecialties.length,
                   itemBuilder: (context, i) {
@@ -439,13 +525,13 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
                       elevation: 0,
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(12),
-                        side: BorderSide(color: Colors.grey.shade200),
+                        side: BorderSide(color: colorScheme.outlineVariant),
                       ),
                       child: ListTile(
                         contentPadding: const EdgeInsets.symmetric(horizontal: 20),
                         title: Text(s['name'], style: const TextStyle(fontWeight: FontWeight.bold)),
                         trailing: IconButton(
-                          icon: const Icon(Icons.delete_outline, color: Colors.red),
+                          icon: Icon(Icons.delete_outline, color: colorScheme.error),
                           onPressed: () => _deleteSpecialty(s['id'], s['name']),
                         ),
                       ),
@@ -524,7 +610,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
 
     if (isWideScreen) {
       return Scaffold(
-        backgroundColor: colorScheme.surfaceVariant.withOpacity(0.3),
+        backgroundColor: colorScheme.surface,
         body: Row(
           children: [
             // Sidebar
@@ -569,7 +655,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
                           icon: const Icon(Icons.logout),
                           label: const Text('Log Out'),
                           style: TextButton.styleFrom(
-                            foregroundColor: Colors.red,
+                            foregroundColor: colorScheme.error,
                             minimumSize: const Size(double.infinity, 44),
                           ),
                         ),
@@ -593,6 +679,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
                       children: [
                         const Text('Dashboard Overview', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w500)),
                         const Spacer(),
+                        const ThemeToggleButton(),
                         IconButton(
                           onPressed: _loadAll,
                           icon: const Icon(Icons.refresh),
@@ -633,6 +720,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
           Tab(text: 'Divisions'),
         ]),
         actions: [
+          const ThemeToggleButton(),
           IconButton(icon: const Icon(Icons.refresh), onPressed: _loadAll),
           IconButton(icon: const Icon(Icons.logout), onPressed: _logout),
         ],

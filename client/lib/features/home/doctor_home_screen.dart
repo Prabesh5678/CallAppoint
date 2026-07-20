@@ -8,6 +8,7 @@ import '../appointments/providers/appointment_provider.dart';
 import '../appointments/models/appointment.dart';
 import '../doctors/screens/availability_screen_body.dart';
 import '../notifications/providers/notification_provider.dart';
+import '../blogs/screens/blog_list_screen.dart';
 
 class DoctorHomeScreen extends ConsumerStatefulWidget {
   const DoctorHomeScreen({super.key});
@@ -33,7 +34,11 @@ class _DoctorHomeScreenState extends ConsumerState<DoctorHomeScreen> {
     return Scaffold(
       body: IndexedStack(
         index: _tabIndex,
-        children: const [_DoctorAppointmentsView(), _ScheduleTab()],
+        children: const [
+          _DoctorAppointmentsView(),
+          BlogListScreen(),
+          _ScheduleTab(),
+        ],
       ),
       bottomNavigationBar: NavigationBar(
         selectedIndex: _tabIndex,
@@ -57,6 +62,10 @@ class _DoctorHomeScreenState extends ConsumerState<DoctorHomeScreen> {
               ],
             ),
             label: 'Appointments',
+          ),
+          const NavigationDestination(
+            icon: Icon(Icons.article),
+            label: 'Blogs',
           ),
           const NavigationDestination(
             icon: Icon(Icons.schedule),
@@ -211,8 +220,27 @@ class _DoctorAppointmentsView extends ConsumerWidget {
                             }
                           : null,
                       onCancel: () async {
-                        await actions.cancel(appt.id);
-                        ref.invalidate(myAppointmentsProvider);
+                        final messenger = ScaffoldMessenger.of(context);
+                        await actions.cancelWithUndo(
+                          appointmentId: appt.id,
+                          showUndoSnackBar: (onUndo, dismiss) {
+                            messenger.clearSnackBars();
+                            messenger.showSnackBar(
+                              SnackBar(
+                                content: const Text('Appointment cancelled'),
+                                action: SnackBarAction(
+                                  label: 'Undo',
+                                  onPressed: onUndo,
+                                ),
+                                duration: const Duration(seconds: 4),
+                              ),
+                            ).closed.then((reason) {
+                              if (reason != SnackBarClosedReason.action) {
+                                dismiss();
+                              }
+                            });
+                          },
+                        );
                       },
                     );
                   },

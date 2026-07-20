@@ -10,6 +10,9 @@ import '../features/doctors/screens/doctor_detail_screen.dart';
 import '../features/chat/screens/chat_screen.dart';
 import '../features/doctors/screens/apply_doctor_screen.dart';
 import '../features/video/screens/video_call_screen.dart';
+import '../features/blogs/screens/blog_list_screen.dart';
+import '../features/blogs/screens/blog_detail_screen.dart';
+import '../features/blogs/screens/edit_blog_screen.dart';
 import '../admin_app/admin_login_screen.dart';
 import 'supabase_client.dart';
 
@@ -54,6 +57,24 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/apply-doctor',
         builder: (context, state) => const ApplyDoctorScreen(),
+      ),
+      GoRoute(
+        path: '/blogs',
+        builder: (context, state) => const BlogListScreen(),
+      ),
+      GoRoute(
+        path: '/blogs/new',
+        builder: (context, state) => const EditBlogScreen(),
+      ),
+      GoRoute(
+        path: '/blogs/:id',
+        builder: (context, state) =>
+            BlogDetailScreen(blogId: state.pathParameters['id']!),
+      ),
+      GoRoute(
+        path: '/blogs/:id/edit',
+        builder: (context, state) =>
+            EditBlogScreen(blogId: state.pathParameters['id']!),
       ),
       GoRoute(
         path: '/secret-admin',

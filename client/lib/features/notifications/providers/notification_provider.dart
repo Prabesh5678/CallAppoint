@@ -107,7 +107,7 @@ class NotificationManager extends StateNotifier<Map<String, bool>> {
             closeIconColor: Colors.white,
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
             margin: const EdgeInsets.all(12),
-            duration: const Duration(seconds: 4),
+            duration: const Duration(seconds: 5), // Increased slightly for visibility
             action: SnackBarAction(
               label: 'Join',
               textColor: Colors.white,
@@ -119,7 +119,8 @@ class NotificationManager extends StateNotifier<Map<String, bool>> {
           ),
         );
       } else {
-        messenger.clearSnackBars();
+        // If presence lost, hide relevant notifications immediately
+        messenger.hideCurrentSnackBar(reason: SnackBarClosedReason.dismiss);
       }
     }
 

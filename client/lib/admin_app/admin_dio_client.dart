@@ -3,20 +3,22 @@ import '../core/config.dart';
 
 class AdminDioClient {
   static String? _token;
+  static Dio? _dio;
 
   static void setToken(String? token) {
     _token = token;
+    _dio?.options.headers['X-Admin-Token'] = _token;
   }
 
   static Dio get instance {
-    final dio = Dio(BaseOptions(
+    _dio ??= Dio(BaseOptions(
       baseUrl: Config.adminApiBaseUrl,
     ));
 
     if (_token != null) {
-      dio.options.headers['X-Admin-Token'] = _token;
+      _dio!.options.headers['X-Admin-Token'] = _token;
     }
 
-    return dio;
+    return _dio!;
   }
 }

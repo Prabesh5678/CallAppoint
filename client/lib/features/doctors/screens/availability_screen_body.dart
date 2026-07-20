@@ -24,6 +24,18 @@ class _AvailabilityScreenBodyState
       '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}:00';
 
   Future<void> _addSlot() async {
+    final startMinutes = _startTime.hour * 60 + _startTime.minute;
+    final endMinutes = _endTime.hour * 60 + _endTime.minute;
+
+    if (endMinutes <= startMinutes) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('End time must be after start time')),
+        );
+      }
+      return;
+    }
+
     try {
       await ref
           .read(availabilityControllerProvider)
@@ -42,7 +54,7 @@ class _AvailabilityScreenBodyState
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed: $e'), backgroundColor: Colors.red),
+          SnackBar(content: Text('Failed: $e'), backgroundColor: Theme.of(context).colorScheme.error),
         );
       }
     }
@@ -165,15 +177,34 @@ class _AvailabilityScreenBodyState
                       ),
                       subtitle: Text('${slot.slotDurationMinutes} min slots'),
                       trailing: IconButton(
-                        icon: const Icon(
+                        icon: Icon(
                           Icons.delete_outline,
-                          color: Colors.red,
+                          color: Theme.of(context).colorScheme.error,
                         ),
                         onPressed: () async {
+                          final messenger = ScaffoldMessenger.of(context);
                           await ref
                               .read(availabilityControllerProvider)
-                              .delete(slot.id);
-                          ref.invalidate(myAvailabilityProvider);
+                              .deleteWithUndo(
+                                id: slot.id,
+                                showUndoSnackBar: (onUndo, dismiss) {
+                                  messenger.clearSnackBars();
+                                  messenger.showSnackBar(
+                                    SnackBar(
+                                      content: const Text('Slot removed'),
+                                      action: SnackBarAction(
+                                        label: 'Undo',
+                                        onPressed: onUndo,
+                                      ),
+                                      duration: const Duration(seconds: 4),
+                                    ),
+                                  ).closed.then((reason) {
+                                    if (reason != SnackBarClosedReason.action) {
+                                      dismiss();
+                                    }
+                                  });
+                                },
+                              );
                         },
                       ),
                     );

@@ -9,6 +9,7 @@ import '../../shared/widgets/pulse_indicator.dart';
 import '../doctors/providers/doctor_provider.dart';
 import '../appointments/providers/appointment_provider.dart';
 import '../notifications/providers/notification_provider.dart';
+import '../blogs/screens/blog_list_screen.dart';
 
 class PatientHomeScreen extends ConsumerStatefulWidget {
   const PatientHomeScreen({super.key});
@@ -34,13 +35,17 @@ class _PatientHomeScreenState extends ConsumerState<PatientHomeScreen> {
     return Scaffold(
       body: IndexedStack(
         index: _tabIndex,
-        children: const [_FindDoctorsTab(), _MyAppointmentsTab()],
+        children: const [
+          _FindDoctorsTab(),
+          BlogListScreen(),
+          _MyAppointmentsTab(),
+        ],
       ),
       bottomNavigationBar: NavigationBar(
         selectedIndex: _tabIndex,
         onDestinationSelected: (index) {
           setState(() => _tabIndex = index);
-          if (index == 1) {
+          if (index == 2) {
             ref.invalidate(myAppointmentsProvider);
           }
         },
@@ -48,6 +53,10 @@ class _PatientHomeScreenState extends ConsumerState<PatientHomeScreen> {
           const NavigationDestination(
             icon: Icon(Icons.search),
             label: 'Find Doctors',
+          ),
+          const NavigationDestination(
+            icon: Icon(Icons.article),
+            label: 'Blogs',
           ),
           NavigationDestination(
             icon: Stack(
@@ -245,8 +254,27 @@ class _MyAppointmentsTab extends ConsumerWidget {
                   appointment: appt,
                   isDoctorView: false,
                   onCancel: () async {
-                    await actions.cancel(appt.id);
-                    ref.invalidate(myAppointmentsProvider);
+                    final messenger = ScaffoldMessenger.of(context);
+                    await actions.cancelWithUndo(
+                      appointmentId: appt.id,
+                      showUndoSnackBar: (onUndo, dismiss) {
+                        messenger.clearSnackBars();
+                        messenger.showSnackBar(
+                          SnackBar(
+                            content: const Text('Appointment cancelled'),
+                            action: SnackBarAction(
+                              label: 'Undo',
+                              onPressed: onUndo,
+                            ),
+                            duration: const Duration(seconds: 4),
+                          ),
+                        ).closed.then((reason) {
+                          if (reason != SnackBarClosedReason.action) {
+                            dismiss();
+                          }
+                        });
+                      },
+                    );
                   },
                 );
               },

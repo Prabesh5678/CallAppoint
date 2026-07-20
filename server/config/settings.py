@@ -34,6 +34,7 @@ INSTALLED_APPS = [
     'payments',
     'chat',
     'notifications',
+    'blogs',
     'adminapi',
 ]
 

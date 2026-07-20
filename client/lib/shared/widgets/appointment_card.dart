@@ -25,6 +25,7 @@ class AppointmentCard extends ConsumerWidget {
   });
 
   Color _statusColor(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
     switch (appointment.status) {
       case 'confirmed':
         return Colors.green;
@@ -32,11 +33,11 @@ class AppointmentCard extends ConsumerWidget {
         return Colors.orange;
       case 'cancelled':
       case 'rejected':
-        return Colors.red;
+        return colorScheme.error;
       case 'completed':
-        return Colors.blue;
+        return colorScheme.primary;
       default:
-        return Colors.grey;
+        return colorScheme.outline;
     }
   }
 
@@ -200,9 +201,9 @@ class AppointmentCard extends ConsumerWidget {
                     alignment: Alignment.centerRight,
                     child: TextButton(
                       onPressed: onCancel,
-                      child: const Text(
+                      child: Text(
                         'Cancel',
-                        style: TextStyle(color: Colors.red),
+                        style: TextStyle(color: Theme.of(context).colorScheme.error),
                       ),
                     ),
                   ),
