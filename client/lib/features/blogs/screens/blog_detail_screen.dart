@@ -32,37 +32,10 @@ class BlogDetailScreen extends ConsumerWidget {
     );
 
     if (confirmed == true) {
-      if (!context.mounted) return;
-
-      final messenger = ScaffoldMessenger.of(context);
-      context.pop(); // Return to list immediately
-
-      try {
-        await ref.read(blogActionsProvider).deleteBlogWithUndo(
-          id: blogId,
-          showUndoSnackBar: (onUndo, dismiss) {
-            messenger.clearSnackBars();
-            final snackBar = SnackBar(
-              content: const Text('Blog deleted'),
-              action: SnackBarAction(
-                label: 'Undo',
-                onPressed: onUndo,
-              ),
-              duration: const Duration(seconds: 4),
-            );
-
-            messenger.showSnackBar(snackBar).closed.then((reason) {
-              // If it closed because of time or swipe, and NOT because of the undo button
-              if (reason != SnackBarClosedReason.action) {
-                dismiss();
-              }
-            });
-          },
-        );
-      } catch (e) {
-        messenger.showSnackBar(
-          SnackBar(content: Text('Error: $e')),
-        );
+      if (context.mounted) {
+        context.pop(); // Return to list immediately
+        // The provider now handles showing its own SnackBar via GlobalKey
+        await ref.read(blogActionsProvider).deleteBlogWithUndo(blogId);
       }
     }
   }

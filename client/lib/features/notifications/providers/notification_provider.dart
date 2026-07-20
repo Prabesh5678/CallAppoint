@@ -7,6 +7,7 @@ import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../core/supabase_client.dart';
 import '../../../core/config.dart';
+import '../../../core/globals.dart';
 
 // Stream of auth state changes to make notifications reactive to login/logout
 final authStateProvider = StreamProvider<AuthState>((ref) {
@@ -71,6 +72,8 @@ class NotificationManager extends StateNotifier<Map<String, bool>> {
     debugPrint('NotificationManager: Event processing started: $data');
     final String type = data['type'] ?? '';
 
+    final messenger = rootScaffoldMessengerKey.currentState;
+
     if (type == 'video_presence') {
       final String? apptId = data['appointment_id']?.toString();
       final bool isPresent = data['is_present'] == true;
@@ -78,16 +81,13 @@ class NotificationManager extends StateNotifier<Map<String, bool>> {
 
       if (apptId == null) return;
 
-      // Update state regardless of context so UI dots work
+      // PREVENT SPAM: Only act if the presence actually changed
+      final bool wasPresent = state[apptId] ?? false;
+      if (wasPresent == isPresent) return;
+
       setPresence(apptId, isPresent);
-      debugPrint('NotificationManager: Presence updated for $apptId: $isPresent');
 
-      if (context == null) {
-        debugPrint('NotificationManager: Context null, toast suppressed');
-        return;
-      }
-
-      final messenger = ScaffoldMessenger.of(context);
+      if (messenger == null) return;
 
       if (isPresent) {
         final roleTitle = role[0].toUpperCase() + role.substring(1);
@@ -107,20 +107,22 @@ class NotificationManager extends StateNotifier<Map<String, bool>> {
             closeIconColor: Colors.white,
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
             margin: const EdgeInsets.all(12),
-            duration: const Duration(seconds: 5), // Increased slightly for visibility
+            duration: const Duration(seconds: 10), // Longer duration for call alerts
             action: SnackBarAction(
               label: 'Join',
               textColor: Colors.white,
               onPressed: () {
                 messenger.hideCurrentSnackBar();
-                context.push('/video/$apptId');
+                if (context != null) {
+                  context.push('/video/$apptId');
+                }
               },
             ),
           ),
         );
       } else {
-        // If presence lost, hide relevant notifications immediately
-        messenger.hideCurrentSnackBar(reason: SnackBarClosedReason.dismiss);
+        // If presence lost, hide relevant notifications
+        messenger.hideCurrentSnackBar();
       }
     }
 
@@ -129,11 +131,9 @@ class NotificationManager extends StateNotifier<Map<String, bool>> {
       final String message = data['message'] ?? '';
       final String? apptId = data['appointment_id']?.toString();
 
-      if (context == null) return;
+      if (messenger == null) return;
 
-      final messenger = ScaffoldMessenger.of(context);
       messenger.clearSnackBars();
-
       messenger.showSnackBar(
         SnackBar(
           content: Column(
@@ -153,7 +153,7 @@ class NotificationManager extends StateNotifier<Map<String, bool>> {
           action: SnackBarAction(
             label: 'View',
             onPressed: () {
-              if (apptId != null) {
+              if (apptId != null && context != null) {
                 messenger.hideCurrentSnackBar();
                 context.push('/chat/$apptId');
               }

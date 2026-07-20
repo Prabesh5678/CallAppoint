@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/blog.dart';
 import '../../../core/dio_client.dart';
+import '../../../core/undo_manager.dart';
 
 // Filter states
 final blogSearchQueryProvider = StateProvider<String>((ref) => '');
@@ -29,7 +30,6 @@ class BlogsNotifier extends AutoDisposeAsyncNotifier<List<Blog>> {
     return list.map((json) => Blog.fromJson(json)).toList();
   }
 
-  /// Locally update the state for optimistic UI
   void setBlogs(List<Blog> blogs) {
     state = AsyncData(blogs);
   }
@@ -63,54 +63,22 @@ class BlogActions {
     ref.invalidate(allBlogsProvider);
   }
 
-  /// Optimistic delete with Undo functionality
-  Future<void> deleteBlogWithUndo({
-    required String id,
-    required void Function(Future<void> Function() onUndo, void Function() onTimeout) showUndoSnackBar,
-  }) async {
+  Future<void> deleteBlogWithUndo(String id) async {
     final previousState = ref.read(allBlogsProvider).valueOrNull;
     if (previousState == null) return;
 
-    // 1. Remove from frontend immediately
     final updatedList = previousState.where((b) => b.id != id).toList();
     ref.read(allBlogsProvider.notifier).setBlogs(updatedList);
 
-    bool wasUndone = false;
-    final userActionCompleter = Completer<void>();
-
-    // 2. Show the SnackBar
-    showUndoSnackBar(
-      // onUndo callback
-      () async {
-        if (userActionCompleter.isCompleted) return;
-        wasUndone = true;
-        ref.read(allBlogsProvider.notifier).setBlogs(previousState);
-        userActionCompleter.complete();
-      },
-      // onTimeout/onDismiss callback
-      () {
-        if (!userActionCompleter.isCompleted) {
-          userActionCompleter.complete();
-        }
-      },
+    final result = await UndoManager.showUndoSnackBar(
+      message: 'Blog deleted',
+      onUndo: () => ref.read(allBlogsProvider.notifier).setBlogs(previousState),
     );
 
-    // 3. Independent Timer to ensure backend request fires even if UI fails to notify
-    final timer = Timer(const Duration(milliseconds: 4500), () {
-      if (!userActionCompleter.isCompleted) {
-        userActionCompleter.complete();
-      }
-    });
-
-    await userActionCompleter.future;
-    timer.cancel();
-
-    // 4. If not undone, fire request to backend
-    if (!wasUndone) {
+    if (!result.wasUndone) {
       try {
         await DioClient.instance.delete('/blogs/$id/');
       } catch (e) {
-        // If backend fails, restore and show error
         ref.read(allBlogsProvider.notifier).setBlogs(previousState);
         rethrow;
       }

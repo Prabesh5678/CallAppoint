@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/dio_client.dart';
+import '../../../core/undo_manager.dart';
 import '../models/appointment.dart';
 import '../../notifications/providers/notification_provider.dart';
 
@@ -51,43 +52,19 @@ class AppointmentActions {
     ref.invalidate(myAppointmentsProvider);
   }
 
-  Future<void> cancelWithUndo({
-    required String appointmentId,
-    String? reason,
-    required void Function(Future<void> Function() onUndo, void Function() dismiss) showUndoSnackBar,
-  }) async {
+  Future<void> cancelWithUndo({required String appointmentId, String? reason}) async {
     final previousState = ref.read(myAppointmentsProvider).valueOrNull;
     if (previousState == null) return;
 
     final updatedList = previousState.where((a) => a.id != appointmentId).toList();
     ref.read(myAppointmentsProvider.notifier).setAppointments(updatedList);
 
-    bool wasUndone = false;
-    final userActionCompleter = Completer<void>();
-
-    showUndoSnackBar(
-      () async {
-        if (userActionCompleter.isCompleted) return;
-        wasUndone = true;
-        ref.read(myAppointmentsProvider.notifier).setAppointments(previousState);
-        userActionCompleter.complete();
-      },
-      () {
-        if (!userActionCompleter.isCompleted) userActionCompleter.complete();
-      },
+    final result = await UndoManager.showUndoSnackBar(
+      message: 'Appointment cancelled',
+      onUndo: () => ref.read(myAppointmentsProvider.notifier).setAppointments(previousState),
     );
 
-    // Independent fallback timer
-    final timer = Timer(const Duration(milliseconds: 4500), () {
-      if (!userActionCompleter.isCompleted) {
-        userActionCompleter.complete();
-      }
-    });
-
-    await userActionCompleter.future;
-    timer.cancel();
-
-    if (!wasUndone) {
+    if (!result.wasUndone) {
       try {
         await DioClient.instance.post(
           '/appointments/$appointmentId/cancel/',

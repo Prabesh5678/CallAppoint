@@ -4,6 +4,7 @@ import 'core/supabase_client.dart';
 import 'core/theme_provider.dart';
 import 'core/app_theme.dart';
 import 'core/router.dart';
+import 'core/globals.dart';
 import 'features/notifications/providers/notification_provider.dart';
 
 void main() async {
@@ -36,6 +37,7 @@ class CallAppointApp extends ConsumerWidget {
 
     return MaterialApp.router(
       title: 'CallAppoint',
+      scaffoldMessengerKey: rootScaffoldMessengerKey,
       theme: AppTheme.light,
       darkTheme: AppTheme.dark,
       themeMode: themeMode,

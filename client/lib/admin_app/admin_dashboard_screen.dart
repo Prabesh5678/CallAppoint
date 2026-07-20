@@ -2,6 +2,8 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../shared/widgets/theme_toggle_button.dart';
+import '../core/globals.dart';
+import '../core/undo_manager.dart';
 import 'admin_dio_client.dart';
 import 'admin_login_screen.dart';
 
@@ -59,7 +61,7 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> wit
       });
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        rootScaffoldMessengerKey.currentState?.showSnackBar(
           SnackBar(content: Text('Failed to load data: $e'), backgroundColor: Theme.of(context).colorScheme.error),
         );
       }
@@ -112,7 +114,7 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> wit
         _allDoctors = originalDoctors;
         _applyFilters();
       });
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed: $e')));
+      rootScaffoldMessengerKey.currentState?.showSnackBar(SnackBar(content: Text('Failed: $e')));
     }
   }
 
@@ -192,39 +194,18 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> wit
       _applyFilters();
     });
 
-    bool wasUndone = false;
-    final messenger = ScaffoldMessenger.of(context);
-    messenger.clearSnackBars();
+    final result = await UndoManager.showUndoSnackBar(
+      message: "${isDoctor ? 'Doctor' : 'Patient'} removed",
+      onUndo: () {
+        setState(() {
+          _allPatients = originalPatients;
+          _allDoctors = originalDoctors;
+          _applyFilters();
+        });
+      },
+    );
 
-    final userActionCompleter = Completer<void>();
-
-    messenger.showSnackBar(
-      SnackBar(
-        content: Text("${isDoctor ? 'Doctor' : 'Patient'} removed"),
-        action: SnackBarAction(
-          label: "Undo",
-          onPressed: () {
-            if (userActionCompleter.isCompleted) return;
-            wasUndone = true;
-            setState(() {
-              _allPatients = originalPatients;
-              _allDoctors = originalDoctors;
-              _applyFilters();
-            });
-            userActionCompleter.complete();
-          },
-        ),
-        duration: const Duration(seconds: 4),
-      ),
-    ).closed.then((reason) {
-      if (reason != SnackBarClosedReason.action && !userActionCompleter.isCompleted) {
-        userActionCompleter.complete();
-      }
-    });
-
-    await userActionCompleter.future;
-
-    if (!wasUndone) {
+    if (!result.wasUndone) {
       try {
         await AdminDioClient.instance.delete('/users/$id/');
       } catch (e) {
@@ -233,7 +214,7 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> wit
           _allDoctors = originalDoctors;
           _applyFilters();
         });
-        if (mounted) messenger.showSnackBar(SnackBar(content: Text('Failed to delete: $e')));
+        rootScaffoldMessengerKey.currentState?.showSnackBar(SnackBar(content: Text('Failed to delete: $e')));
       }
     }
   }
@@ -255,7 +236,7 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> wit
       });
     } catch (e) {
       setState(() => _allSpecialties = original);
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed: $e')));
+      rootScaffoldMessengerKey.currentState?.showSnackBar(SnackBar(content: Text('Failed: $e')));
     }
   }
 
@@ -265,40 +246,19 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> wit
 
     setState(() => _allSpecialties.removeWhere((s) => s['id'] == id));
 
-    bool wasUndone = false;
-    final messenger = ScaffoldMessenger.of(context);
-    messenger.clearSnackBars();
+    final result = await UndoManager.showUndoSnackBar(
+      message: "Division '$name' removed",
+      onUndo: () {
+        setState(() => _allSpecialties = original);
+      },
+    );
 
-    final userActionCompleter = Completer<void>();
-
-    messenger.showSnackBar(
-      SnackBar(
-        content: Text("Division '$name' removed"),
-        action: SnackBarAction(
-          label: "Undo",
-          onPressed: () {
-            if (userActionCompleter.isCompleted) return;
-            wasUndone = true;
-            setState(() => _allSpecialties = original);
-            userActionCompleter.complete();
-          },
-        ),
-        duration: const Duration(seconds: 4),
-      ),
-    ).closed.then((reason) {
-      if (reason != SnackBarClosedReason.action && !userActionCompleter.isCompleted) {
-        userActionCompleter.complete();
-      }
-    });
-
-    await userActionCompleter.future;
-
-    if (!wasUndone) {
+    if (!result.wasUndone) {
       try {
         await AdminDioClient.instance.delete('/specialties/$id/');
       } catch (e) {
         setState(() => _allSpecialties = original);
-        if (mounted) messenger.showSnackBar(SnackBar(content: Text('Failed: $e')));
+        rootScaffoldMessengerKey.currentState?.showSnackBar(SnackBar(content: Text('Failed: $e')));
       }
     }
   }
@@ -355,7 +315,7 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> wit
                             ElevatedButton(
                               onPressed: () => _approveDoctor(doc['id']),
                               style: ElevatedButton.styleFrom(
-                                backgroundColor: Colors.green.withOpacity(0.1),
+                                backgroundColor: Colors.green.withValues(alpha: 0.1),
                                 foregroundColor: Colors.green,
                                 elevation: 0,
                               ),
@@ -529,10 +489,10 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> wit
                       ),
                       child: ListTile(
                         contentPadding: const EdgeInsets.symmetric(horizontal: 20),
-                        title: Text(s['name'], style: const TextStyle(fontWeight: FontWeight.bold)),
+                        title: Text(s['name'] ?? '', style: const TextStyle(fontWeight: FontWeight.bold)),
                         trailing: IconButton(
                           icon: Icon(Icons.delete_outline, color: colorScheme.error),
-                          onPressed: () => _deleteSpecialty(s['id'], s['name']),
+                          onPressed: () => _deleteSpecialty(s['id'], s['name'] ?? ''),
                         ),
                       ),
                     );

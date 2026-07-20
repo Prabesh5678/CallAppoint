@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/dio_client.dart';
+import '../../../core/undo_manager.dart';
 
 class WeeklySlot {
   final String id;
@@ -65,43 +66,19 @@ class AvailabilityController {
     ref.invalidate(myAvailabilityProvider);
   }
 
-  Future<void> deleteWithUndo({
-    required String id,
-    required void Function(Future<void> Function() onUndo, void Function() dismiss) showUndoSnackBar,
-  }) async {
+  Future<void> deleteWithUndo(String id) async {
     final previousState = ref.read(myAvailabilityProvider).valueOrNull;
     if (previousState == null) return;
 
-    // Optimistic remove
     final updatedList = previousState.where((s) => s.id != id).toList();
     ref.read(myAvailabilityProvider.notifier).setSlots(updatedList);
 
-    bool wasUndone = false;
-    final userActionCompleter = Completer<void>();
-
-    showUndoSnackBar(
-      () async {
-        if (userActionCompleter.isCompleted) return;
-        wasUndone = true;
-        ref.read(myAvailabilityProvider.notifier).setSlots(previousState);
-        userActionCompleter.complete();
-      },
-      () {
-        if (!userActionCompleter.isCompleted) userActionCompleter.complete();
-      },
+    final result = await UndoManager.showUndoSnackBar(
+      message: 'Slot removed',
+      onUndo: () => ref.read(myAvailabilityProvider.notifier).setSlots(previousState),
     );
 
-    // Independent fallback timer
-    final timer = Timer(const Duration(milliseconds: 4500), () {
-      if (!userActionCompleter.isCompleted) {
-        userActionCompleter.complete();
-      }
-    });
-
-    await userActionCompleter.future;
-    timer.cancel();
-
-    if (!wasUndone) {
+    if (!result.wasUndone) {
       try {
         await DioClient.instance.delete('/doctors/me/availability/$id/');
       } catch (e) {

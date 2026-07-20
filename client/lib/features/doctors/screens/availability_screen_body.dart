@@ -182,29 +182,9 @@ class _AvailabilityScreenBodyState
                           color: Theme.of(context).colorScheme.error,
                         ),
                         onPressed: () async {
-                          final messenger = ScaffoldMessenger.of(context);
                           await ref
                               .read(availabilityControllerProvider)
-                              .deleteWithUndo(
-                                id: slot.id,
-                                showUndoSnackBar: (onUndo, dismiss) {
-                                  messenger.clearSnackBars();
-                                  messenger.showSnackBar(
-                                    SnackBar(
-                                      content: const Text('Slot removed'),
-                                      action: SnackBarAction(
-                                        label: 'Undo',
-                                        onPressed: onUndo,
-                                      ),
-                                      duration: const Duration(seconds: 4),
-                                    ),
-                                  ).closed.then((reason) {
-                                    if (reason != SnackBarClosedReason.action) {
-                                      dismiss();
-                                    }
-                                  });
-                                },
-                              );
+                              .deleteWithUndo(slot.id);
                         },
                       ),
                     );
