@@ -299,6 +299,7 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> wit
                 _buildDetailRow('Consultation Fee', 'Rs. ${doc['consultation_fee']}'),
                 _buildDetailRow('Rating', '${doc['average_rating']} (${doc['total_reviews']} reviews)'),
                 _buildDetailRow('Status', doc['verification_status']?.toString().toUpperCase()),
+                _buildDetailRow('Joined', doc['created_at'] != null ? DateFormat('MMM dd, yyyy').format(DateTime.parse(doc['created_at'].toString())) : 'Unknown'),
                 const SizedBox(height: 16),
                 const Text('Bio', style: TextStyle(fontWeight: FontWeight.bold)),
                 const SizedBox(height: 4),
