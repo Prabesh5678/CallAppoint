@@ -18,6 +18,10 @@ class BlogListScreen extends ConsumerWidget {
       orElse: () => false,
     );
 
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isMobile = screenWidth < 640;
+    final horizontalPadding = isMobile ? 16.0 : 24.0;
+
     const bgColor = Color(0xFF0D0D0D);
     const accentRed = Color(0xFFE8433D);
 
@@ -30,28 +34,35 @@ class BlogListScreen extends ConsumerWidget {
             slivers: [
               SliverToBoxAdapter(
                 child: Padding(
-                  padding: const EdgeInsets.fromLTRB(24, 56, 24, 36),
+                  padding: EdgeInsets.fromLTRB(
+                    horizontalPadding,
+                    isMobile ? 32 : 56,
+                    horizontalPadding,
+                    isMobile ? 24 : 36,
+                  ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          RichText(
-                            text: TextSpan(
-                              style: GoogleFonts.poppins(
-                                fontSize: 36,
-                                fontWeight: FontWeight.w700,
-                                color: const Color(0xFFECECEC),
-                                letterSpacing: 0.5,
-                              ),
-                              children: [
-                                const TextSpan(text: 'Blog '),
-                                TextSpan(
-                                  text: '/ Literature',
-                                  style: GoogleFonts.poppins(color: accentRed),
+                          Expanded(
+                            child: RichText(
+                              text: TextSpan(
+                                style: GoogleFonts.poppins(
+                                  fontSize: isMobile ? 28 : 36,
+                                  fontWeight: FontWeight.w700,
+                                  color: const Color(0xFFECECEC),
+                                  letterSpacing: 0.5,
                                 ),
-                              ],
+                                children: [
+                                  const TextSpan(text: 'Blog '),
+                                  TextSpan(
+                                    text: '/ Literature',
+                                    style: GoogleFonts.poppins(color: accentRed),
+                                  ),
+                                ],
+                              ),
                             ),
                           ),
                           Row(
@@ -97,7 +108,7 @@ class BlogListScreen extends ConsumerWidget {
                     );
                   }
                   return SliverPadding(
-                    padding: const EdgeInsets.symmetric(horizontal: 24),
+                    padding: EdgeInsets.symmetric(horizontal: horizontalPadding),
                     sliver: SliverList(
                       delegate: SliverChildBuilderDelegate(
                         (context, index) {

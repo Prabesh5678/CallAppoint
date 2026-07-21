@@ -44,7 +44,7 @@ class _BlogPostRowState extends State<BlogPostRow> {
         Text(
           '— ${DateFormat('MMM dd, yyyy').format(widget.blog.createdAt)}',
           style: GoogleFonts.inter(
-            fontSize: 13,
+            fontSize: isMobile ? 12 : 13,
             color: const Color(0xFF7A7A7A),
             letterSpacing: 0.3,
           ),
@@ -53,7 +53,7 @@ class _BlogPostRowState extends State<BlogPostRow> {
         Text(
           widget.blog.title,
           style: GoogleFonts.poppins(
-            fontSize: 21,
+            fontSize: isMobile ? 20 : 21,
             fontWeight: FontWeight.w600,
             height: 1.35,
             color: categoryColor,
@@ -65,16 +65,16 @@ class _BlogPostRowState extends State<BlogPostRow> {
           children: [
             if (widget.blog.doctorAvatarUrl != null)
               CircleAvatar(
-                radius: 10,
+                radius: isMobile ? 11 : 10,
                 backgroundImage: CachedNetworkImageProvider(widget.blog.doctorAvatarUrl!),
               )
             else
-              const Icon(Icons.person, size: 16, color: Color(0xFF7A7A7A)),
+              Icon(Icons.person, size: isMobile ? 18 : 16, color: const Color(0xFF7A7A7A)),
             const SizedBox(width: 8),
             Text(
               widget.blog.displayDoctorName,
               style: GoogleFonts.inter(
-                fontSize: 13,
+                fontSize: isMobile ? 14 : 13,
                 fontWeight: FontWeight.w500,
                 color: const Color(0xFFECECEC),
               ),
@@ -87,7 +87,7 @@ class _BlogPostRowState extends State<BlogPostRow> {
           maxLines: 5,
           overflow: TextOverflow.ellipsis,
           style: GoogleFonts.inter(
-            fontSize: 15,
+            fontSize: isMobile ? 14 : 15,
             height: 1.7,
             color: const Color(0xFF9A9A9A),
           ),
@@ -171,13 +171,13 @@ class _BlogPostRowState extends State<BlogPostRow> {
       onTap: widget.onTap,
       onHover: (hovering) => setState(() => _isHovered = hovering),
       child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 32),
+        padding: EdgeInsets.symmetric(vertical: isMobile ? 24 : 32),
         child: isMobile
             ? Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   thumbnail,
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 20),
                   content,
                 ],
               )

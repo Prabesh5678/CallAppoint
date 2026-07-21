@@ -61,6 +61,10 @@ class BlogDetailScreen extends ConsumerWidget {
       orElse: () => null,
     );
 
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isMobile = screenWidth < 640;
+    final horizontalPadding = isMobile ? 16.0 : 24.0;
+
     const bgColor = Color(0xFF0D0D0D);
     const surfaceColor = Color(0xFF151515);
     const accentRed = Color(0xFFE8433D);
@@ -79,7 +83,7 @@ class BlogDetailScreen extends ConsumerWidget {
           return CustomScrollView(
             slivers: [
               SliverAppBar(
-                expandedHeight: 300,
+                expandedHeight: isMobile ? 240 : 300,
                 pinned: true,
                 backgroundColor: bgColor,
                 leading: Padding(
@@ -134,13 +138,13 @@ class BlogDetailScreen extends ConsumerWidget {
                         onPressed: () => _confirmDelete(context, ref),
                       ),
                     ),
-                    const SizedBox(width: 16),
+                    SizedBox(width: isMobile ? 8 : 16),
                   ],
                 ],
               ),
               SliverToBoxAdapter(
                 child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
+                  padding: EdgeInsets.symmetric(horizontal: horizontalPadding, vertical: isMobile ? 24 : 32),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -156,7 +160,7 @@ class BlogDetailScreen extends ConsumerWidget {
                       Text(
                         blog.title,
                         style: GoogleFonts.poppins(
-                          fontSize: 28,
+                          fontSize: isMobile ? 24 : 28,
                           fontWeight: FontWeight.w700,
                           height: 1.3,
                           color: categoryColor,
@@ -172,16 +176,16 @@ class BlogDetailScreen extends ConsumerWidget {
                           ),
                         ),
                       ),
-                      const SizedBox(height: 32),
+                      const SizedBox(height: 24),
                       Row(
                         children: [
                           CircleAvatar(
-                            radius: 18,
+                            radius: 16,
                             backgroundImage: blog.doctorAvatarUrl != null
                                 ? NetworkImage(blog.doctorAvatarUrl!)
                                 : null,
                             child: blog.doctorAvatarUrl == null
-                                ? const Icon(Icons.person, size: 20)
+                                ? const Icon(Icons.person, size: 18)
                                 : null,
                           ),
                           const SizedBox(width: 12),
@@ -195,11 +199,11 @@ class BlogDetailScreen extends ConsumerWidget {
                           ),
                         ],
                       ),
-                      const SizedBox(height: 32),
+                      const SizedBox(height: 24),
                       Text(
                         blog.content,
                         style: GoogleFonts.inter(
-                          fontSize: 17,
+                          fontSize: isMobile ? 16 : 17,
                           height: 1.8,
                           color: const Color(0xFF9A9A9A),
                         ),

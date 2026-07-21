@@ -174,6 +174,8 @@ class _EditBlogScreenState extends ConsumerState<EditBlogScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final isMobile = MediaQuery.of(context).size.width < 640;
+
     return Stack(
       children: [
         Scaffold(
@@ -189,12 +191,12 @@ class _EditBlogScreenState extends ConsumerState<EditBlogScreen> {
           body: Form(
             key: _formKey,
             child: ListView(
-              padding: const EdgeInsets.all(16),
+              padding: EdgeInsets.all(isMobile ? 16 : 24),
               children: [
                 GestureDetector(
                   onTap: _saveStage == _SaveStage.none ? _pickImage : null,
                   child: Container(
-                    height: 200,
+                    height: isMobile ? 180 : 220,
                     decoration: BoxDecoration(
                       color: const Color(0xFF151515),
                       borderRadius: BorderRadius.circular(12),
@@ -213,18 +215,18 @@ class _EditBlogScreenState extends ConsumerState<EditBlogScreen> {
                               : null),
                     ),
                     child: _imageFile == null && _thumbnailUrl == null
-                        ? const Column(
+                        ? Column(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
-                              Icon(Icons.add_a_photo, size: 50, color: Colors.grey),
-                              SizedBox(height: 8),
-                              Text('Pick Thumbnail', style: TextStyle(color: Colors.grey)),
+                              Icon(Icons.add_a_photo, size: isMobile ? 40 : 50, color: Colors.grey),
+                              const SizedBox(height: 8),
+                              const Text('Pick Thumbnail', style: TextStyle(color: Colors.grey)),
                             ],
                           )
                         : null,
                   ),
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(height: 24),
                 DropdownButtonFormField<String>(
                   value: _category,
                   dropdownColor: const Color(0xFF151515),
@@ -242,7 +244,7 @@ class _EditBlogScreenState extends ConsumerState<EditBlogScreen> {
                         }
                       : null,
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(height: 20),
                 TextFormField(
                   controller: _titleController,
                   enabled: _saveStage == _SaveStage.none,
@@ -260,7 +262,7 @@ class _EditBlogScreenState extends ConsumerState<EditBlogScreen> {
                     return null;
                   },
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(height: 20),
                 TextFormField(
                   controller: _contentController,
                   enabled: _saveStage == _SaveStage.none,
@@ -279,6 +281,7 @@ class _EditBlogScreenState extends ConsumerState<EditBlogScreen> {
                     return null;
                   },
                 ),
+                const SizedBox(height: 40),
               ],
             ),
           ),

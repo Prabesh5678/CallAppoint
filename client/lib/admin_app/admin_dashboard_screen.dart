@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/intl.dart';
 import '../shared/widgets/theme_toggle_button.dart';
 import '../core/globals.dart';
 import '../core/undo_manager.dart';
@@ -263,6 +264,126 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> wit
     }
   }
 
+  void _showDoctorDetails(Map<String, dynamic> doc) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final specs = (doc['specialties'] as List?) ?? [];
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Doctor Details'),
+        content: SizedBox(
+          width: 500,
+          child: SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Center(
+                  child: CircleAvatar(
+                    radius: 50,
+                    backgroundColor: colorScheme.primaryContainer,
+                    backgroundImage: (doc['avatar_url'] != null && doc['avatar_url'].toString().isNotEmpty)
+                        ? NetworkImage(doc['avatar_url'])
+                        : null,
+                    child: (doc['avatar_url'] == null || doc['avatar_url'].toString().isEmpty)
+                        ? Icon(Icons.person, size: 50, color: colorScheme.primary)
+                        : null,
+                  ),
+                ),
+                const SizedBox(height: 24),
+                _buildDetailRow('Full Name', doc['full_name']),
+                _buildDetailRow('Specialties', specs.join(', ')),
+                _buildDetailRow('License Number', doc['license_number']),
+                _buildDetailRow('Experience', '${doc['years_experience']} years'),
+                _buildDetailRow('Consultation Fee', 'Rs. ${doc['consultation_fee']}'),
+                _buildDetailRow('Rating', '${doc['average_rating']} (${doc['total_reviews']} reviews)'),
+                _buildDetailRow('Status', doc['verification_status']?.toString().toUpperCase()),
+                const SizedBox(height: 16),
+                const Text('Bio', style: TextStyle(fontWeight: FontWeight.bold)),
+                const SizedBox(height: 4),
+                Text(doc['bio'] ?? 'No bio provided', style: TextStyle(color: colorScheme.onSurfaceVariant)),
+              ],
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Close')),
+          if (doc['verification_status'] == 'pending') ...[
+            TextButton(
+              onPressed: () {
+                Navigator.pop(context);
+                _showRejectDialog(doc['id']);
+              },
+              style: TextButton.styleFrom(foregroundColor: colorScheme.error),
+              child: const Text('Decline'),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                Navigator.pop(context);
+                _approveDoctor(doc['id']);
+              },
+              child: const Text('Approve'),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  void _showPatientDetails(Map<String, dynamic> p) {
+    final colorScheme = Theme.of(context).colorScheme;
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Patient Details'),
+        content: SizedBox(
+          width: 400,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Center(
+                child: CircleAvatar(
+                  radius: 50,
+                  backgroundColor: colorScheme.primaryContainer,
+                  backgroundImage: (p['avatar_url'] != null && p['avatar_url'].toString().isNotEmpty)
+                      ? NetworkImage(p['avatar_url'])
+                      : null,
+                  child: (p['avatar_url'] == null || p['avatar_url'].toString().isEmpty)
+                      ? Icon(Icons.person, size: 50, color: colorScheme.primary)
+                      : null,
+                ),
+              ),
+              const SizedBox(height: 24),
+              _buildDetailRow('Full Name', p['full_name']),
+              _buildDetailRow('Phone', p['phone']),
+              _buildDetailRow('Gender', p['gender']),
+              _buildDetailRow('Date of Birth', p['date_of_birth']),
+              _buildDetailRow('Joined', p['created_at'] != null ? DateFormat('MMM dd, yyyy').format(DateTime.parse(p['created_at'])) : 'Unknown'),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Close')),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDetailRow(String label, String? value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(width: 140, child: Text(label, style: const TextStyle(fontWeight: FontWeight.bold))),
+          Expanded(child: Text(value ?? 'N/A')),
+        ],
+      ),
+    );
+  }
+
   void _logout() {
     AdminDioClient.setToken(null);
     Navigator.of(context).pushReplacement(
@@ -306,6 +427,7 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> wit
                         side: BorderSide(color: colorScheme.outlineVariant),
                       ),
                       child: ListTile(
+                        onTap: () => _showDoctorDetails(doc),
                         contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
                         title: Text(doc['full_name'] ?? '', style: const TextStyle(fontWeight: FontWeight.bold)),
                         subtitle: Text('License: ${doc['license_number']}'),
@@ -382,6 +504,7 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> wit
                         side: BorderSide(color: colorScheme.outlineVariant),
                       ),
                       child: ListTile(
+                        onTap: () => _showDoctorDetails(doc),
                         contentPadding: const EdgeInsets.symmetric(horizontal: 20),
                         title: Text(doc['full_name'] ?? '', style: const TextStyle(fontWeight: FontWeight.bold)),
                         subtitle: Text('${specs.join(", ")} · ${doc['license_number']}'),
@@ -419,6 +542,7 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> wit
                         side: BorderSide(color: colorScheme.outlineVariant),
                       ),
                       child: ListTile(
+                        onTap: () => _showPatientDetails(p),
                         contentPadding: const EdgeInsets.symmetric(horizontal: 20),
                         title: Text(p['full_name'] ?? '', style: const TextStyle(fontWeight: FontWeight.bold)),
                         subtitle: Text(p['phone'] ?? 'No phone'),
