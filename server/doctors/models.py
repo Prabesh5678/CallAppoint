@@ -26,7 +26,10 @@ class DoctorProfile(models.Model):
         db_table = 'doctor_profiles'
 
     def __str__(self):
-        return f"Dr. {self.id.full_name}"
+        name = self.id.full_name
+        if name.lower().startswith('dr.') or name.lower().startswith('dr '):
+            return name
+        return f"Dr. {name}"
 
 
 class VerificationDocument(models.Model):

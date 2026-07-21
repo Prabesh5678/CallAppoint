@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:google_fonts/google_fonts.dart';
 import '../providers/blog_provider.dart';
 import '../../auth/providers/auth_provider.dart';
-import 'widgets/blog_card.dart';
+import 'widgets/blog_post_row.dart';
 
 class BlogListScreen extends ConsumerWidget {
   const BlogListScreen({super.key});
@@ -17,78 +18,133 @@ class BlogListScreen extends ConsumerWidget {
       orElse: () => false,
     );
 
+    const bgColor = Color(0xFF0D0D0D);
+    const accentRed = Color(0xFFE8433D);
+
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Medical Blogs'),
-        bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(60),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            child: Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    decoration: InputDecoration(
-                      hintText: 'Search blogs...',
-                      prefixIcon: const Icon(Icons.search),
-                      isDense: true,
-                      filled: true,
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: BorderSide.none,
+      backgroundColor: bgColor,
+      body: SafeArea(
+        child: RefreshIndicator(
+          onRefresh: () async => ref.refresh(allBlogsProvider),
+          child: CustomScrollView(
+            slivers: [
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(24, 56, 24, 36),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          RichText(
+                            text: TextSpan(
+                              style: GoogleFonts.poppins(
+                                fontSize: 36,
+                                fontWeight: FontWeight.w700,
+                                color: const Color(0xFFECECEC),
+                                letterSpacing: 0.5,
+                              ),
+                              children: [
+                                const TextSpan(text: 'Blog '),
+                                TextSpan(
+                                  text: '/ Literature',
+                                  style: GoogleFonts.poppins(color: accentRed),
+                                ),
+                              ],
+                            ),
+                          ),
+                          Row(
+                            children: [
+                              _FilterButton(isDoctor: isDoctor),
+                              if (isDoctor)
+                                IconButton(
+                                  onPressed: () => context.push('/blogs/new'),
+                                  icon: const Icon(Icons.add, color: Colors.white),
+                                ),
+                            ],
+                          )
+                        ],
                       ),
-                    ),
-                    onChanged: (value) =>
-                        ref.read(blogSearchQueryProvider.notifier).state = value,
+                      const SizedBox(height: 14),
+                      Container(
+                        height: 2,
+                        decoration: const BoxDecoration(
+                          gradient: LinearGradient(
+                            colors: [
+                              accentRed,
+                              Color(0xFF4A1A18),
+                              Colors.transparent,
+                            ],
+                            stops: [0.0, 0.6, 1.0],
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-                const SizedBox(width: 8),
-                _FilterButton(isDoctor: isDoctor),
-              ],
-            ),
-          ),
-        ),
-      ),
-      body: RefreshIndicator(
-        onRefresh: () async => ref.refresh(allBlogsProvider),
-        child: blogsAsync.when(
-          data: (blogs) {
-            if (blogs.isEmpty) {
-              return ListView(
-                physics: const AlwaysScrollableScrollPhysics(),
-                children: const [
-                  SizedBox(height: 100),
-                  Center(child: Text('No blogs found')),
-                ],
-              );
-            }
-            return ListView.builder(
-              physics: const AlwaysScrollableScrollPhysics(),
-              padding: const EdgeInsets.symmetric(vertical: 8),
-              itemCount: blogs.length,
-              itemBuilder: (context, index) {
-                final blog = blogs[index];
-                return BlogCard(
-                  blog: blog,
-                  onTap: () => context.push('/blogs/${blog.id}'),
-                );
-              },
-            );
-          },
-          loading: () => const Center(child: CircularProgressIndicator()),
-          error: (e, _) => ListView(
-            physics: const AlwaysScrollableScrollPhysics(),
-            children: [
-              const SizedBox(height: 100),
-              Center(child: Text('Error: $e')),
+              ),
+              blogsAsync.when(
+                data: (blogs) {
+                  if (blogs.isEmpty) {
+                    return const SliverFillRemaining(
+                      child: Center(
+                        child: Text(
+                          'No blogs found',
+                          style: TextStyle(color: Colors.white70),
+                        ),
+                      ),
+                    );
+                  }
+                  return SliverPadding(
+                    padding: const EdgeInsets.symmetric(horizontal: 24),
+                    sliver: SliverList(
+                      delegate: SliverChildBuilderDelegate(
+                        (context, index) {
+                          final blog = blogs[index];
+                          final isLast = index == blogs.length - 1;
+                          return Column(
+                            children: [
+                              BlogPostRow(
+                                blog: blog,
+                                onTap: () => context.push('/blogs/${blog.id}'),
+                              ),
+                              if (!isLast)
+                                const Divider(
+                                  height: 1,
+                                  thickness: 1,
+                                  color: Color(0xFF272727),
+                                ),
+                            ],
+                          );
+                        },
+                        childCount: blogs.length,
+                      ),
+                    ),
+                  );
+                },
+                loading: () => const SliverFillRemaining(
+                  child: Center(child: CircularProgressIndicator()),
+                ),
+                error: (e, _) => SliverFillRemaining(
+                  child: Center(
+                    child: Text(
+                      'Error: $e',
+                      style: const TextStyle(color: Colors.white70),
+                    ),
+                  ),
+                ),
+              ),
             ],
           ),
         ),
       ),
       floatingActionButton: isDoctor
           ? FloatingActionButton(
+              heroTag: 'blog_list_fab',
               onPressed: () => context.push('/blogs/new'),
-              child: const Icon(Icons.add),
+              backgroundColor: accentRed,
+              child: const Icon(Icons.add, color: Colors.white),
             )
           : null,
     );
@@ -103,7 +159,8 @@ class _FilterButton extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     return PopupMenuButton<String>(
-      icon: const Icon(Icons.filter_list),
+      icon: const Icon(Icons.filter_list, color: Colors.white70),
+      color: const Color(0xFF151515),
       onSelected: (value) {
         if (isDoctor) {
           ref.read(showOnlyMyOwnBlogsProvider.notifier).state =
@@ -121,9 +178,9 @@ class _FilterButton extends ConsumerWidget {
               value: 'all',
               child: Row(
                 children: [
-                  if (!onlyMyBlogs) const Icon(Icons.check, size: 18),
+                  if (!onlyMyBlogs) const Icon(Icons.check, size: 18, color: Colors.white),
                   const SizedBox(width: 8),
-                  const Text('All Blogs'),
+                  const Text('All Blogs', style: TextStyle(color: Colors.white)),
                 ],
               ),
             ),
@@ -131,9 +188,9 @@ class _FilterButton extends ConsumerWidget {
               value: 'my_blogs',
               child: Row(
                 children: [
-                  if (onlyMyBlogs) const Icon(Icons.check, size: 18),
+                  if (onlyMyBlogs) const Icon(Icons.check, size: 18, color: Colors.white),
                   const SizedBox(width: 8),
-                  const Text('My Blogs'),
+                  const Text('My Blogs', style: TextStyle(color: Colors.white)),
                 ],
               ),
             ),
@@ -145,9 +202,9 @@ class _FilterButton extends ConsumerWidget {
               value: 'all',
               child: Row(
                 children: [
-                  if (!onlyMyDoctors) const Icon(Icons.check, size: 18),
+                  if (!onlyMyDoctors) const Icon(Icons.check, size: 18, color: Colors.white),
                   const SizedBox(width: 8),
-                  const Text('All Blogs'),
+                  const Text('All Blogs', style: TextStyle(color: Colors.white)),
                 ],
               ),
             ),
@@ -155,9 +212,9 @@ class _FilterButton extends ConsumerWidget {
               value: 'my_doctors',
               child: Row(
                 children: [
-                  if (onlyMyDoctors) const Icon(Icons.check, size: 18),
+                  if (onlyMyDoctors) const Icon(Icons.check, size: 18, color: Colors.white),
                   const SizedBox(width: 8),
-                  const Text("My Doctors' Blogs"),
+                  const Text("My Doctors' Blogs", style: TextStyle(color: Colors.white)),
                 ],
               ),
             ),

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import '../../shared/widgets/theme_toggle_button.dart';
 import '../../shared/widgets/logout_button.dart';
 import '../../shared/widgets/appointment_card.dart';
@@ -9,6 +10,8 @@ import '../appointments/models/appointment.dart';
 import '../doctors/screens/availability_screen_body.dart';
 import '../notifications/providers/notification_provider.dart';
 import '../blogs/screens/blog_list_screen.dart';
+
+import '../auth/screens/profile_screen.dart';
 
 class DoctorHomeScreen extends ConsumerStatefulWidget {
   const DoctorHomeScreen({super.key});
@@ -38,6 +41,7 @@ class _DoctorHomeScreenState extends ConsumerState<DoctorHomeScreen> {
           _DoctorAppointmentsView(),
           BlogListScreen(),
           _ScheduleTab(),
+          ProfileScreen(),
         ],
       ),
       bottomNavigationBar: NavigationBar(
@@ -69,7 +73,11 @@ class _DoctorHomeScreenState extends ConsumerState<DoctorHomeScreen> {
           ),
           const NavigationDestination(
             icon: Icon(Icons.schedule),
-            label: 'My Schedule',
+            label: 'Schedule',
+          ),
+          const NavigationDestination(
+            icon: Icon(Icons.person),
+            label: 'Profile',
           ),
         ],
       ),
@@ -123,7 +131,6 @@ class _DoctorAppointmentsView extends ConsumerWidget {
               onPressed: () => ref.invalidate(myAppointmentsProvider),
             ),
             const ThemeToggleButton(),
-            const LogoutButton(),
           ],
           bottom: TabBar(
             tabs: [
@@ -154,6 +161,7 @@ class _DoctorAppointmentsView extends ConsumerWidget {
           ),
         ),
         floatingActionButton: FloatingActionButton(
+          heroTag: 'doctor_appointments_refresh_fab',
           onPressed: () => ref.invalidate(myAppointmentsProvider),
           tooltip: 'Refresh Appointments',
           child: const Icon(Icons.refresh),

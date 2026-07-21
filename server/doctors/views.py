@@ -71,6 +71,17 @@ class MyDoctorProfileView(generics.RetrieveUpdateAPIView):
     def get_object(self):
         return DoctorProfile.objects.get(id=self.request.user.id)
 
+    @transaction.atomic
+    def perform_update(self, serializer):
+        specialty_ids = serializer.validated_data.pop('specialty_ids', None)
+        instance = serializer.save()
+
+        if specialty_ids is not None:
+            # Sync specialties
+            DoctorSpecialty.objects.filter(doctor=instance).delete()
+            for spec_id in specialty_ids:
+                DoctorSpecialty.objects.create(doctor=instance, specialty_id=spec_id)
+
 class ApplyForDoctorView(generics.CreateAPIView):
     serializer_class = DoctorApplicationSerializer
     permission_classes = [IsAuthenticated]

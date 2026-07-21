@@ -45,8 +45,8 @@ class AppointmentCard extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final dateFmt = DateFormat('MMM d, y • h:mm a');
     final otherPartyName = isDoctorView
-        ? appointment.patientName
-        : appointment.doctorName;
+        ? (appointment.patientName ?? 'Unknown Patient')
+        : appointment.displayDoctorName;
 
     final isOtherWaiting = ref.watch(peerPresenceProvider(appointment.id)).maybeWhen(
       data: (isPresent) => isPresent,

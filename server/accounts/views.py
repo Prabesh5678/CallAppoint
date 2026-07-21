@@ -1,15 +1,13 @@
-from rest_framework.decorators import api_view
-from rest_framework.response import Response
+from rest_framework import generics
+from .serializers import UserSerializer
 
-@api_view(['GET'])
-def me(request):
-    user = request.user  # SupabaseUser instance from SupabaseJWTAuthentication
-    db_user = user.db_user
-    return Response({
-        'id': str(db_user.id),
-        'email': user.email,
-        'role': db_user.role,
-        'full_name': db_user.full_name,
-        'phone': db_user.phone,
-        'is_active': db_user.is_active,
-    })
+class UserMeView(generics.RetrieveUpdateAPIView):
+    """
+    GET/PATCH /api/accounts/me/ — the logged-in user manages their own basic profile.
+    """
+    serializer_class = UserSerializer
+
+    def get_object(self):
+        # request.user is a SupabaseUser instance from SupabaseJWTAuthentication
+        # request.user.db_user is the Django User model instance
+        return self.request.user.db_user

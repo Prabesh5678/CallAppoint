@@ -11,6 +11,8 @@ import '../appointments/providers/appointment_provider.dart';
 import '../notifications/providers/notification_provider.dart';
 import '../blogs/screens/blog_list_screen.dart';
 
+import '../auth/screens/profile_screen.dart';
+
 class PatientHomeScreen extends ConsumerStatefulWidget {
   const PatientHomeScreen({super.key});
 
@@ -37,26 +39,23 @@ class _PatientHomeScreenState extends ConsumerState<PatientHomeScreen> {
         index: _tabIndex,
         children: const [
           _FindDoctorsTab(),
-          BlogListScreen(),
           _MyAppointmentsTab(),
+          BlogListScreen(),
+          ProfileScreen(),
         ],
       ),
       bottomNavigationBar: NavigationBar(
         selectedIndex: _tabIndex,
         onDestinationSelected: (index) {
           setState(() => _tabIndex = index);
-          if (index == 2) {
+          if (index == 1) {
             ref.invalidate(myAppointmentsProvider);
           }
         },
         destinations: [
           const NavigationDestination(
             icon: Icon(Icons.search),
-            label: 'Find Doctors',
-          ),
-          const NavigationDestination(
-            icon: Icon(Icons.article),
-            label: 'Blogs',
+            label: 'Find',
           ),
           NavigationDestination(
             icon: Stack(
@@ -71,6 +70,14 @@ class _PatientHomeScreenState extends ConsumerState<PatientHomeScreen> {
               ],
             ),
             label: 'Appointments',
+          ),
+          const NavigationDestination(
+            icon: Icon(Icons.article),
+            label: 'Blogs',
+          ),
+          const NavigationDestination(
+            icon: Icon(Icons.person),
+            label: 'Profile',
           ),
         ],
       ),
@@ -104,7 +111,6 @@ class _FindDoctorsTabState extends ConsumerState<_FindDoctorsTab> {
             onPressed: () => context.push('/apply-doctor'),
           ),
           const ThemeToggleButton(),
-          const LogoutButton(),
         ],
       ),
       body: RefreshIndicator(
@@ -215,10 +221,10 @@ class _MyAppointmentsTab extends ConsumerWidget {
             onPressed: () => ref.invalidate(myAppointmentsProvider),
           ),
           const ThemeToggleButton(),
-          const LogoutButton(),
         ],
       ),
       floatingActionButton: FloatingActionButton(
+        heroTag: 'patient_appointments_refresh_fab',
         onPressed: () => ref.invalidate(myAppointmentsProvider),
         tooltip: 'Refresh Appointments',
         child: const Icon(Icons.refresh),

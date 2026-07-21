@@ -5,6 +5,8 @@ class Blog {
   final String? doctorAvatarUrl;
   final String title;
   final String content;
+  final String? thumbnailUrl;
+  final String category;
   final DateTime createdAt;
   final DateTime updatedAt;
 
@@ -15,9 +17,19 @@ class Blog {
     this.doctorAvatarUrl,
     required this.title,
     required this.content,
+    this.thumbnailUrl,
+    required this.category,
     required this.createdAt,
     required this.updatedAt,
   });
+
+  String get displayDoctorName {
+    if (doctorName.toLowerCase().startsWith('dr.') ||
+        doctorName.toLowerCase().startsWith('dr ')) {
+      return doctorName;
+    }
+    return 'Dr. $doctorName';
+  }
 
   factory Blog.fromJson(Map<String, dynamic> json) {
     return Blog(
@@ -27,6 +39,8 @@ class Blog {
       doctorAvatarUrl: json['doctor_avatar_url'],
       title: json['title'] ?? 'No Title',
       content: json['content'] ?? '',
+      thumbnailUrl: json['thumbnail_url'],
+      category: json['category'] ?? 'General',
       createdAt: DateTime.parse(json['created_at']),
       updatedAt: DateTime.parse(json['updated_at']),
     );
@@ -36,6 +50,8 @@ class Blog {
     return {
       'title': title,
       'content': content,
+      'thumbnail_url': thumbnailUrl,
+      'category': category,
     };
   }
 }

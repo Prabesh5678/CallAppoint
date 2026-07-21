@@ -35,6 +35,14 @@ class Doctor {
     required this.specialties,
   });
 
+  String get displayName {
+    if (fullName.toLowerCase().startsWith('dr.') ||
+        fullName.toLowerCase().startsWith('dr ')) {
+      return fullName;
+    }
+    return 'Dr. $fullName';
+  }
+
   factory Doctor.fromJson(Map<String, dynamic> json) {
     return Doctor(
       id: json['id'],

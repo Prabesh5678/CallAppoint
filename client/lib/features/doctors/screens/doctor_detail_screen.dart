@@ -229,7 +229,7 @@ class _DoctorDetailScreenState extends ConsumerState<DoctorDetailScreen>
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'Dr. ${doctor.fullName}',
+                          doctor.displayName,
                           style: const TextStyle(
                             fontSize: 20,
                             fontWeight: FontWeight.bold,

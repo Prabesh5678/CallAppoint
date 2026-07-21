@@ -23,6 +23,15 @@ class Appointment {
     this.videoRoomId,
   });
 
+  String get displayDoctorName {
+    final name = doctorName ?? 'Unknown Doctor';
+    if (name.toLowerCase().startsWith('dr.') ||
+        name.toLowerCase().startsWith('dr ')) {
+      return name;
+    }
+    return 'Dr. $name';
+  }
+
   factory Appointment.fromJson(Map<String, dynamic> json) {
     return Appointment(
       id: json['id'],

@@ -3,7 +3,13 @@ import 'supabase_client.dart';
 import 'config.dart';
 
 class DioClient {
-  static final Dio _dio = Dio(BaseOptions(baseUrl: Config.apiBaseUrl))
+  static final Dio _dio = Dio(
+    BaseOptions(
+      baseUrl: Config.apiBaseUrl,
+      connectTimeout: const Duration(seconds: 10),
+      receiveTimeout: const Duration(seconds: 30),
+    ),
+  )
     ..interceptors.add(
       InterceptorsWrapper(
         onRequest: (options, handler) async {

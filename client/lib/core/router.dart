@@ -9,6 +9,7 @@ import '../features/home/doctor_home_screen.dart';
 import '../features/doctors/screens/doctor_detail_screen.dart';
 import '../features/chat/screens/chat_screen.dart';
 import '../features/doctors/screens/apply_doctor_screen.dart';
+import '../features/auth/screens/profile_screen.dart';
 import '../features/video/screens/video_call_screen.dart';
 import '../features/blogs/screens/blog_list_screen.dart';
 import '../features/blogs/screens/blog_detail_screen.dart';
@@ -57,6 +58,10 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/apply-doctor',
         builder: (context, state) => const ApplyDoctorScreen(),
+      ),
+      GoRoute(
+        path: '/profile',
+        builder: (context, state) => const ProfileScreen(),
       ),
       GoRoute(
         path: '/blogs',

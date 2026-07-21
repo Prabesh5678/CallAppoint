@@ -54,9 +54,21 @@ class DoctorDetailSerializer(serializers.ModelSerializer):
 
 class DoctorProfileUpdateSerializer(serializers.ModelSerializer):
     """What a doctor can edit on their own profile."""
+    specialty_ids = serializers.ListField(
+        child=serializers.UUIDField(),
+        write_only=True,
+        required=False
+    )
+    current_specialty_ids = serializers.SerializerMethodField(read_only=True)
+
     class Meta:
         model = DoctorProfile
-        fields = ['bio', 'years_experience', 'consultation_fee']
+        fields = ['bio', 'years_experience', 'consultation_fee', 'specialty_ids', 'current_specialty_ids', 'license_number', 'verification_status']
+        read_only_fields = ['verification_status']
+
+    def get_current_specialty_ids(self, obj):
+        return [ds.specialty_id for ds in obj.doctor_specialties.all()]
+
 
 class DoctorApplicationSerializer(serializers.ModelSerializer):
     specialty_ids = serializers.ListField(child=serializers.UUIDField(), write_only=True, required=False)
