@@ -1,7 +1,4 @@
-import hmac
-import hashlib
-import base64
-import time
+import hmac, hashlib, base64, time
 from datetime import datetime
 from rest_framework import generics, status
 from rest_framework.decorators import api_view, permission_classes
@@ -203,3 +200,22 @@ def get_ice_servers(request):
             },
         ]
     })
+    # LOCAL_COTURN_IP = "192.168.1.75"
+    # LOCAL_COTURN_SECRET = "9fbd4867d6ac8a6bcfef49b00d53e71d6822c16696821c7f689146b5a7d331fa"  # from /etc/turnserver.conf
+
+    # ttl_seconds = 86400  # 24 hours
+    # username = str(int(time.time()) + ttl_seconds)
+    # credential = base64.b64encode(
+    #     hmac.new(LOCAL_COTURN_SECRET.encode(), username.encode(), hashlib.sha1).digest()
+    # ).decode()
+
+    # return Response({
+    #     'iceServers': [
+    #         {'urls': [f'stun:{LOCAL_COTURN_IP}:3478']},
+    #         {
+    #             'urls': [f'turn:{LOCAL_COTURN_IP}:3478?transport=udp'],
+    #             'username': username,
+    #             'credential': credential,
+    #         },
+    #     ]
+    # })

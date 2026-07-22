@@ -33,7 +33,7 @@ class AdminListPatientsView(APIView):
 
     def get(self, request):
         patients = User.objects.filter(role='patient').values(
-            'id', 'full_name', 'phone', 'is_active', 'created_at'
+            'id', 'full_name', 'phone', 'is_active', 'created_at', 'gender', 'date_of_birth', 'avatar_url'
         ).order_by('-created_at')
         return Response(list(patients))
 
@@ -46,7 +46,7 @@ class AdminListDoctorsView(APIView):
         status_filter = request.query_params.get('status')  # pending/approved/rejected
         specialty_filter = request.query_params.get('specialty')
 
-        qs = DoctorProfile.objects.select_related('id')
+        qs = DoctorProfile.objects.select_related('id').prefetch_related('doctor_specialties__specialty')
 
         if status_filter:
             qs = qs.filter(verification_status=status_filter)
@@ -60,6 +60,11 @@ class AdminListDoctorsView(APIView):
             'license_number': d.license_number,
             'verification_status': d.verification_status,
             'consultation_fee': str(d.consultation_fee),
+            'years_experience': d.years_experience,
+            'bio': d.bio,
+            'average_rating': float(d.average_rating),
+            'total_reviews': d.total_reviews,
+            'avatar_url': d.id.avatar_url,
             'created_at': d.created_at,
             'specialties': [ds.specialty.name for ds in d.doctor_specialties.all()]
         } for d in qs]
