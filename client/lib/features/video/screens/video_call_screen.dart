@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
+import 'package:uuid/uuid.dart';
 import '../../../core/supabase_client.dart';
 import '../../../core/dio_client.dart';
 import '../../../core/config.dart';
@@ -19,6 +20,7 @@ class VideoCallScreen extends ConsumerStatefulWidget {
 class _VideoCallScreenState extends ConsumerState<VideoCallScreen> {
   final _localRenderer = RTCVideoRenderer();
   final _remoteRenderer = RTCVideoRenderer();
+  final String callAttemptId = const Uuid().v4();
   RTCPeerConnection? _pc;
   MediaStream? _localStream;
   WebSocketChannel? _channel;
@@ -40,6 +42,19 @@ class _VideoCallScreenState extends ConsumerState<VideoCallScreen> {
   String _connectionMethod = "Checking...";
   bool _showStatsOverlay = false;
 
+  // --- FIX: ICE candidate race-condition guard ---
+  // Candidates can arrive over the signaling WebSocket BEFORE
+  // setRemoteDescription() has finished (it's async, and the WS
+  // 'ice' messages can be delivered concurrently). Calling
+  // addCandidate() before the remote description is set can
+  // silently fail, dropping that candidate — which was causing
+  // otherwise-viable direct (srflx) candidates to be lost, forcing
+  // an unnecessary fallback to TURN relay. We buffer any candidates
+  // that arrive too early and flush them right after
+  // setRemoteDescription completes.
+  bool _remoteDescriptionSet = false;
+  final List<Map<String, dynamic>> _pendingCandidates = [];
+
   @override
   void initState() {
     super.initState();
@@ -52,7 +67,10 @@ class _VideoCallScreenState extends ConsumerState<VideoCallScreen> {
       await _remoteRenderer.initialize();
 
       // 1. Fetch secure ICE servers from backend
-      final response = await DioClient.instance.get('/appointments/ice-servers/');
+      final response = await DioClient.instance.get(
+        '/appointments/ice-servers/',
+        queryParameters: {'call_attempt_id': callAttemptId},
+      );
       final iceConfig = Map<String, dynamic>.from(response.data);
 
       // 2. Get User Media
@@ -95,7 +113,10 @@ class _VideoCallScreenState extends ConsumerState<VideoCallScreen> {
       debugPrint('Initialization error: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to initialize call: $e'), backgroundColor: Colors.red),
+          SnackBar(
+            content: Text('Failed to initialize call: $e'),
+            backgroundColor: Colors.red,
+          ),
         );
         Navigator.pop(context);
       }
@@ -111,8 +132,8 @@ class _VideoCallScreenState extends ConsumerState<VideoCallScreen> {
       for (var report in stats) {
         // 1. More robust detection of Method & Latency
         if (report.type == 'candidate-pair' &&
-           (report.values['nominated'] == true || report.values['state'] == 'succeeded')) {
-
+            (report.values['nominated'] == true ||
+                report.values['state'] == 'succeeded')) {
           final localId = report.values['localCandidateId'];
           final remoteId = report.values['remoteCandidateId'];
 
@@ -121,8 +142,12 @@ class _VideoCallScreenState extends ConsumerState<VideoCallScreen> {
             final localReport = stats.firstWhere((r) => r.id == localId);
             final remoteReport = stats.firstWhere((r) => r.id == remoteId);
 
-            final lType = localReport.values['candidateType'].toString().toLowerCase();
-            final rType = remoteReport.values['candidateType'].toString().toLowerCase();
+            final lType = localReport.values['candidateType']
+                .toString()
+                .toLowerCase();
+            final rType = remoteReport.values['candidateType']
+                .toString()
+                .toLowerCase();
 
             if (lType == 'relay' || rType == 'relay') {
               method = "TURN (Relay)";
@@ -137,7 +162,10 @@ class _VideoCallScreenState extends ConsumerState<VideoCallScreen> {
             setState(() {
               _connectionMethod = method;
               // Extract Latency: some devices use currentRoundTripTime or roundTripTime
-              final rtt = report.values['currentRoundTripTime'] ?? report.values['roundTripTime'] ?? 0;
+              final rtt =
+                  report.values['currentRoundTripTime'] ??
+                  report.values['roundTripTime'] ??
+                  0;
               _latencyMs = rtt * 1000;
             });
           }
@@ -148,7 +176,8 @@ class _VideoCallScreenState extends ConsumerState<VideoCallScreen> {
           int currentBytes = report.values['bytesReceived'] ?? 0;
           if (_lastBytesReceived > 0 && mounted) {
             setState(() {
-              _bitrateMbps = ((currentBytes - _lastBytesReceived) * 8) / (2 * 1000000);
+              _bitrateMbps =
+                  ((currentBytes - _lastBytesReceived) * 8) / (2 * 1000000);
             });
           }
           _lastBytesReceived = currentBytes;
@@ -157,10 +186,47 @@ class _VideoCallScreenState extends ConsumerState<VideoCallScreen> {
     });
   }
 
+  // --- FIX: queue-or-apply helper ---
+  Future<void> _handleIncomingCandidate(Map<String, dynamic> c) async {
+    if (!_remoteDescriptionSet) {
+      _pendingCandidates.add(c);
+      debugPrint(
+        'Queued ICE candidate (remote description not set yet). '
+        'Queue size: ${_pendingCandidates.length}',
+      );
+      return;
+    }
+    await _addCandidateFromMap(c);
+  }
+
+  Future<void> _addCandidateFromMap(Map<String, dynamic> c) async {
+    if (_pc == null) return;
+    try {
+      await _pc!.addCandidate(
+        RTCIceCandidate(c['candidate'], c['sdpMid'], c['sdpMLineIndex']),
+      );
+    } catch (e) {
+      debugPrint('Failed to add ICE candidate: $e');
+    }
+  }
+
+  // --- FIX: call immediately after every setRemoteDescription ---
+  Future<void> _flushPendingCandidates() async {
+    _remoteDescriptionSet = true;
+    if (_pendingCandidates.isEmpty) return;
+    debugPrint('Flushing ${_pendingCandidates.length} queued ICE candidates');
+    for (final c in _pendingCandidates) {
+      await _addCandidateFromMap(c);
+    }
+    _pendingCandidates.clear();
+  }
+
   void _connectSignaling() {
     final token = supabase.auth.currentSession?.accessToken;
     _channel = WebSocketChannel.connect(
-      Uri.parse('${Config.wsBaseUrl}/ws/video/${widget.appointmentId}/?token=$token'),
+      Uri.parse(
+        '${Config.wsBaseUrl}/ws/video/${widget.appointmentId}/?token=$token',
+      ),
     );
 
     _channel!.stream.listen((event) async {
@@ -170,17 +236,25 @@ class _VideoCallScreenState extends ConsumerState<VideoCallScreen> {
           await _createOffer();
           break;
         case 'offer':
-          await _pc!.setRemoteDescription(RTCSessionDescription(data['sdp'], data['sdpType']));
+          await _pc!.setRemoteDescription(
+            RTCSessionDescription(data['sdp'], data['sdpType']),
+          );
+          await _flushPendingCandidates(); // FIX: flush right after remote desc is set
           final answer = await _pc!.createAnswer();
           await _pc!.setLocalDescription(answer);
           _send({'type': 'answer', 'sdp': answer.sdp, 'sdpType': answer.type});
           break;
         case 'answer':
-          await _pc!.setRemoteDescription(RTCSessionDescription(data['sdp'], data['sdpType']));
+          await _pc!.setRemoteDescription(
+            RTCSessionDescription(data['sdp'], data['sdpType']),
+          );
+          await _flushPendingCandidates(); // FIX: flush right after remote desc is set
           break;
         case 'ice':
           final c = data['candidate'];
-          await _pc!.addCandidate(RTCIceCandidate(c['candidate'], c['sdpMid'], c['sdpMLineIndex']));
+          await _handleIncomingCandidate(
+            c,
+          ); // FIX: queue-or-apply instead of direct add
           break;
         case 'toggle-audio':
           setState(() => _remoteMicEnabled = data['enabled']);
@@ -265,10 +339,19 @@ class _VideoCallScreenState extends ConsumerState<VideoCallScreen> {
                 // Remote Video
                 Positioned.fill(
                   child: !_remoteJoined
-                      ? const Center(child: Text('Waiting for the other person...', style: TextStyle(color: Colors.white70)))
+                      ? const Center(
+                          child: Text(
+                            'Waiting for the other person...',
+                            style: TextStyle(color: Colors.white70),
+                          ),
+                        )
                       : Stack(
                           children: [
-                            RTCVideoView(_remoteRenderer, objectFit: RTCVideoViewObjectFit.RTCVideoViewObjectFitCover),
+                            RTCVideoView(
+                              _remoteRenderer,
+                              objectFit: RTCVideoViewObjectFit
+                                  .RTCVideoViewObjectFitCover,
+                            ),
                             if (!_remoteCamEnabled)
                               Container(
                                 color: Colors.black87,
@@ -276,9 +359,19 @@ class _VideoCallScreenState extends ConsumerState<VideoCallScreen> {
                                   child: Column(
                                     mainAxisSize: MainAxisSize.min,
                                     children: [
-                                      Icon(Icons.videocam_off, color: Colors.white54, size: 80),
+                                      Icon(
+                                        Icons.videocam_off,
+                                        color: Colors.white54,
+                                        size: 80,
+                                      ),
                                       SizedBox(height: 16),
-                                      Text('Remote camera is off', style: TextStyle(color: Colors.white54, fontSize: 18)),
+                                      Text(
+                                        'Remote camera is off',
+                                        style: TextStyle(
+                                          color: Colors.white54,
+                                          fontSize: 18,
+                                        ),
+                                      ),
                                     ],
                                   ),
                                 ),
@@ -288,13 +381,29 @@ class _VideoCallScreenState extends ConsumerState<VideoCallScreen> {
                                 top: 40,
                                 left: 16,
                                 child: Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                                  decoration: BoxDecoration(color: Colors.redAccent.withOpacity(0.8), borderRadius: BorderRadius.circular(20)),
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 12,
+                                    vertical: 6,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: Colors.redAccent.withOpacity(0.8),
+                                    borderRadius: BorderRadius.circular(20),
+                                  ),
                                   child: const Row(
                                     children: [
-                                      Icon(Icons.mic_off, color: Colors.white, size: 16),
+                                      Icon(
+                                        Icons.mic_off,
+                                        color: Colors.white,
+                                        size: 16,
+                                      ),
                                       SizedBox(width: 6),
-                                      Text('Remote muted', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                                      Text(
+                                        'Remote muted',
+                                        style: TextStyle(
+                                          color: Colors.white,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
                                     ],
                                   ),
                                 ),
@@ -337,13 +446,29 @@ class _VideoCallScreenState extends ConsumerState<VideoCallScreen> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              Text('Method: $_connectionMethod',
-                                  style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold)),
+                              Text(
+                                'Method: $_connectionMethod',
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
                               const SizedBox(height: 4),
-                              Text('Latency: ${_latencyMs.toStringAsFixed(0)} ms',
-                                  style: const TextStyle(color: Colors.white70, fontSize: 12)),
-                              Text('Bandwidth: ${_bitrateMbps.toStringAsFixed(2)} Mbps',
-                                  style: const TextStyle(color: Colors.white70, fontSize: 12)),
+                              Text(
+                                'Latency: ${_latencyMs.toStringAsFixed(0)} ms',
+                                style: const TextStyle(
+                                  color: Colors.white70,
+                                  fontSize: 12,
+                                ),
+                              ),
+                              Text(
+                                'Bandwidth: ${_bitrateMbps.toStringAsFixed(2)} Mbps',
+                                style: const TextStyle(
+                                  color: Colors.white70,
+                                  fontSize: 12,
+                                ),
+                              ),
                             ],
                           ),
                         ),
@@ -352,16 +477,28 @@ class _VideoCallScreenState extends ConsumerState<VideoCallScreen> {
                         children: [
                           // Diagnostic Button
                           MouseRegion(
-                            onEnter: (_) => setState(() => _showStatsOverlay = true),
-                            onExit: (_) => setState(() => _showStatsOverlay = false),
+                            onEnter: (_) =>
+                                setState(() => _showStatsOverlay = true),
+                            onExit: (_) =>
+                                setState(() => _showStatsOverlay = false),
                             child: GestureDetector(
-                              onTap: () => setState(() => _showStatsOverlay = !_showStatsOverlay),
-                              onLongPressStart: (_) => setState(() => _showStatsOverlay = true),
-                              onLongPressEnd: (_) => setState(() => _showStatsOverlay = false),
+                              onTap: () => setState(
+                                () => _showStatsOverlay = !_showStatsOverlay,
+                              ),
+                              onLongPressStart: (_) =>
+                                  setState(() => _showStatsOverlay = true),
+                              onLongPressEnd: (_) =>
+                                  setState(() => _showStatsOverlay = false),
                               child: CircleAvatar(
                                 radius: 24,
-                                backgroundColor: _showStatsOverlay ? Colors.blueAccent : Colors.white12,
-                                child: const Icon(Icons.analytics_outlined, color: Colors.white, size: 20),
+                                backgroundColor: _showStatsOverlay
+                                    ? Colors.blueAccent
+                                    : Colors.white12,
+                                child: const Icon(
+                                  Icons.analytics_outlined,
+                                  color: Colors.white,
+                                  size: 20,
+                                ),
                               ),
                             ),
                           ),
@@ -380,7 +517,9 @@ class _VideoCallScreenState extends ConsumerState<VideoCallScreen> {
                           ),
                           const SizedBox(width: 16),
                           _ControlButton(
-                            icon: _camEnabled ? Icons.videocam : Icons.videocam_off,
+                            icon: _camEnabled
+                                ? Icons.videocam
+                                : Icons.videocam_off,
                             color: _camEnabled ? Colors.white24 : Colors.red,
                             onPressed: _toggleCam,
                           ),
@@ -399,14 +538,21 @@ class _ControlButton extends StatelessWidget {
   final IconData icon;
   final Color color;
   final VoidCallback onPressed;
-  const _ControlButton({required this.icon, required this.color, required this.onPressed});
+  const _ControlButton({
+    required this.icon,
+    required this.color,
+    required this.onPressed,
+  });
 
   @override
   Widget build(BuildContext context) {
     return CircleAvatar(
       radius: 28,
       backgroundColor: color,
-      child: IconButton(icon: Icon(icon, color: Colors.white), onPressed: onPressed),
+      child: IconButton(
+        icon: Icon(icon, color: Colors.white),
+        onPressed: onPressed,
+      ),
     );
   }
 }

@@ -1,3 +1,4 @@
+from django.db import transaction
 from rest_framework import generics, status
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
@@ -81,6 +82,7 @@ def initiate_khalti_payment(request):
 
 @api_view(['POST'])
 @permission_classes([IsAuthenticated, IsPatient])
+@transaction.atomic
 def verify_khalti_payment(request):
     """
     POST /api/payments/khalti/verify/  body: {"pidx": "..."}
@@ -91,7 +93,7 @@ def verify_khalti_payment(request):
         raise ValidationError("pidx is required")
 
     try:
-        payment = Payment.objects.get(gateway_txn_id=pidx, patient_id=request.user.id)
+        payment = Payment.objects.select_for_update().get(gateway_txn_id=pidx, patient_id=request.user.id)
     except Payment.DoesNotExist:
         raise NotFound("Payment record not found")
 
@@ -102,6 +104,9 @@ def verify_khalti_payment(request):
     lookup = khalti.lookup_payment(pidx)
 
     if lookup['status'] == 'Completed' and int(lookup['total_amount']) == int(payment.amount * 100):
+        # Lock the doctor profile to ensure slot availability check is consistent
+        DoctorProfile.objects.select_for_update().get(id=payment.doctor_id)
+
         # re-check slot is still open right before creating the appointment (race guard)
         slots = get_available_slots(payment.doctor_id, payment.scheduled_start.date())
         slot_matches = any(

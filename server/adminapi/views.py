@@ -1,3 +1,4 @@
+import logging
 from rest_framework import generics, status
 from rest_framework.views import APIView
 from rest_framework.response import Response
@@ -8,6 +9,8 @@ from django.conf import settings
 from accounts.admin_auth import StaticAdminAuthentication
 from accounts.models import User
 from doctors.models import DoctorProfile, Specialty
+
+logger = logging.getLogger(__name__)
 
 
 @api_view(['POST'])
@@ -27,47 +30,66 @@ def admin_login(request):
     return Response({'detail': 'Invalid credentials'}, status=401)
 
 
-class AdminListPatientsView(APIView):
+class AdminListPatientsView(generics.ListAPIView):
     authentication_classes = [StaticAdminAuthentication]
     permission_classes = []
+    serializer_class = None # We'll use values() for now to keep it simple or create a serializer
 
-    def get(self, request):
-        patients = User.objects.filter(role='patient').values(
+    def get_queryset(self):
+        return User.objects.filter(role='patient').values(
             'id', 'full_name', 'phone', 'is_active', 'created_at', 'gender', 'date_of_birth', 'avatar_url'
         ).order_by('-created_at')
-        return Response(list(patients))
+
+    def list(self, request, *args, **kwargs):
+        queryset = self.get_queryset()
+        page = self.paginate_queryset(queryset)
+        if page is not None:
+            return self.get_paginated_response(list(page))
+        return Response(list(queryset))
 
 
-class AdminListDoctorsView(APIView):
+class AdminListDoctorsView(generics.ListAPIView):
     authentication_classes = [StaticAdminAuthentication]
     permission_classes = []
 
-    def get(self, request):
-        status_filter = request.query_params.get('status')  # pending/approved/rejected
-        specialty_filter = request.query_params.get('specialty')
+    def get_queryset(self):
+        status_filter = self.request.query_params.get('status')
+        specialty_filter = self.request.query_params.get('specialty')
 
-        qs = DoctorProfile.objects.select_related('id').prefetch_related('doctor_specialties__specialty')
+        qs = DoctorProfile.objects.select_related('id').prefetch_related('doctor_specialties__specialty').order_by('-created_at')
 
         if status_filter:
             qs = qs.filter(verification_status=status_filter)
 
         if specialty_filter:
             qs = qs.filter(doctor_specialties__specialty_id=specialty_filter)
+        return qs
 
-        data = [{
-            'id': str(d.id_id),
-            'full_name': d.id.full_name,
-            'license_number': d.license_number,
-            'verification_status': d.verification_status,
-            'consultation_fee': str(d.consultation_fee),
-            'years_experience': d.years_experience,
-            'bio': d.bio,
-            'average_rating': float(d.average_rating),
-            'total_reviews': d.total_reviews,
-            'avatar_url': d.id.avatar_url,
-            'created_at': d.created_at,
-            'specialties': [ds.specialty.name for ds in d.doctor_specialties.all()]
-        } for d in qs]
+    def list(self, request, *args, **kwargs):
+        queryset = self.get_queryset()
+        page = self.paginate_queryset(queryset)
+
+        def format_doctor(d):
+            return {
+                'id': str(d.id_id),
+                'full_name': d.id.full_name,
+                'license_number': d.license_number,
+                'verification_status': d.verification_status,
+                'consultation_fee': str(d.consultation_fee),
+                'years_experience': d.years_experience,
+                'bio': d.bio,
+                'average_rating': float(d.average_rating),
+                'total_reviews': d.total_reviews,
+                'avatar_url': d.id.avatar_url,
+                'created_at': d.created_at,
+                'specialties': [ds.specialty.name for ds in d.doctor_specialties.all()]
+            }
+
+        if page is not None:
+            data = [format_doctor(d) for d in page]
+            return self.get_paginated_response(data)
+
+        data = [format_doctor(d) for d in queryset]
         return Response(data)
 
 
@@ -88,6 +110,7 @@ def approve_doctor(request, doctor_id):
     with connection.cursor() as cursor:
         cursor.execute("UPDATE users SET role = 'doctor' WHERE id = %s", [str(doctor_id)])
 
+    logger.info(f"Admin approved doctor profile: {doctor_id}")
     return Response({'detail': 'Doctor approved'})
 
 
@@ -105,6 +128,11 @@ def reject_doctor(request, doctor_id):
     profile.rejection_reason = reason
     profile.save()
 
+    # Reset user role back to patient upon rejection
+    with connection.cursor() as cursor:
+        cursor.execute("UPDATE users SET role = 'patient' WHERE id = %s", [str(doctor_id)])
+
+    logger.info(f"Admin rejected doctor profile: {doctor_id}. Reason: {reason}")
     return Response({'detail': 'Doctor rejected'})
 
 
@@ -116,7 +144,11 @@ def remove_user(request, user_id):
         user = User.objects.get(id=user_id)
     except User.DoesNotExist:
         return Response({'detail': 'Not found'}, status=404)
+
+    full_name = user.full_name
     user.delete()
+
+    logger.warning(f"Admin removed user: {user_id} ({full_name})")
     return Response({'detail': 'User removed'})
 
 

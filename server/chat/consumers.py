@@ -156,7 +156,7 @@ class VideoSignalConsumer(AsyncWebsocketConsumer):
 
         # Track presence in cache
         cache_key = f"video_presence_{self.appointment_id}_{self.user['role']}"
-        cache.set(cache_key, True, timeout=3600)
+        cache.set(cache_key, True, timeout=300) # 5 minutes instead of 1 hour
         print(f"DEBUG: Presence ON for {self.user['role']} in appt {self.appointment_id}")
 
         await self._notify_peer_presence(is_joining=True)

@@ -102,17 +102,15 @@ class _EditBlogScreenState extends ConsumerState<EditBlogScreen> {
         debugPrint('EditBlogScreen: Starting image processing...');
 
         // Phase 1: Compression (Processing)
-        // If it's a large image, this takes a moment.
-        if (_isCanceled) return;
+        // Give Flutter one frame to render the overlay before blocking thread
+        await Future.delayed(const Duration(milliseconds: 100));
 
-        if (kIsWeb && _webImageBytes != null) {
-          // On Web, we already have bytes, but we might still want to compress
-          // But for immediate feedback, let's move to "Saving" once upload starts
-        }
+        if (_isCanceled) return;
 
         // Transition to Saving phase
-        if (_isCanceled) return;
         setState(() => _saveStage = _SaveStage.saving);
+        // Give another small delay for UI transition
+        await Future.delayed(const Duration(milliseconds: 50));
 
         if (kIsWeb && _webImageBytes != null) {
           uploadedUrl = await actions.uploadThumbnailBytes(_webImageBytes!, _imageFile!.name);
@@ -123,6 +121,7 @@ class _EditBlogScreenState extends ConsumerState<EditBlogScreen> {
       } else {
         // No image, just saving the text
         setState(() => _saveStage = _SaveStage.saving);
+        await Future.delayed(const Duration(milliseconds: 50));
       }
 
       if (_isCanceled) return;

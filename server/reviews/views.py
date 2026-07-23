@@ -16,8 +16,20 @@ class CreateReviewView(generics.CreateAPIView):
     @transaction.atomic
     def perform_create(self, serializer):
         appointment = serializer.validated_data['appointment']
+        user_id = self.request.user.id
+
+        # Security & Logic Checks
+        if str(appointment.patient_id) != str(user_id):
+            raise PermissionDenied("You can only review your own appointments")
+
+        if appointment.status != 'completed':
+            raise ValidationError("You can only review completed appointments")
+
+        if Review.objects.filter(appointment=appointment).exists():
+            raise ValidationError("You have already reviewed this appointment")
+
         review = serializer.save(
-            patient_id=self.request.user.id,
+            patient_id=user_id,
             doctor_id=appointment.doctor_id,
         )
         self._recompute_doctor_rating(appointment.doctor_id)

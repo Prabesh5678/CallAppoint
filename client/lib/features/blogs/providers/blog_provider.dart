@@ -115,7 +115,7 @@ class BlogActions {
     }
   }
 
-  static const String _bucketName = 'blog';
+  static const String _bucketName = 'blogs';
 
   Future<String?> uploadThumbnail(File imageFile) async {
     try {

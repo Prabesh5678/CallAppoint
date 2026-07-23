@@ -18,6 +18,11 @@ class CreatePrescriptionView(generics.CreateAPIView):
     def perform_create(self, serializer):
         items_data = serializer.validated_data.pop('items')
         appointment = serializer.validated_data['appointment']
+
+        # Security: ensure this doctor owns the appointment
+        if str(appointment.doctor_id) != str(self.request.user.id):
+            raise PermissionDenied("You can only write prescriptions for your own appointments")
+
         prescription = Prescription.objects.create(
             appointment=appointment,
             doctor_id=self.request.user.id,

@@ -1,17 +1,21 @@
-import hmac, hashlib, base64, time
+import hmac, hashlib, base64, time, logging
 from datetime import datetime
+from django.db import transaction
 from rest_framework import generics, status
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.exceptions import ValidationError, PermissionDenied
 from accounts.permissions import IsPatient, IsDoctor
+from doctors.models import DoctorProfile
 from .models import Appointment
 from .serializers import AppointmentSerializer, AppointmentCreateSerializer
 from .services import get_available_slots
 from notifications.services import notify_user
 from django.utils import timezone as dj_timezone
 from django.conf import settings
+
+logger = logging.getLogger(__name__)
 
 
 def _ensure_aware(dt):
@@ -50,9 +54,16 @@ class BookAppointmentView(generics.CreateAPIView):
     serializer_class = AppointmentCreateSerializer
     permission_classes = [IsAuthenticated, IsPatient]
 
+    @transaction.atomic
     def perform_create(self, serializer):
         data = serializer.validated_data
-        slots = get_available_slots(data['doctor'].pk, data['scheduled_start'].date())
+        doctor_id = data['doctor'].pk
+
+        # Lock the doctor profile to serialize bookings for this doctor
+        # preventing race conditions where two patients book the same slot
+        DoctorProfile.objects.select_for_update().get(id=doctor_id)
+
+        slots = get_available_slots(doctor_id, data['scheduled_start'].date())
 
         requested_start = _ensure_aware(data['scheduled_start'])
         requested_end = _ensure_aware(data['scheduled_end'])
@@ -133,6 +144,16 @@ def cancel_appointment(request, pk):
     appt.cancelled_by_id = user.id
     appt.cancellation_reason = request.data.get('reason', '')
     appt.save()
+
+    # Notify the other party
+    peer_id = appt.doctor_id if str(user.id) == str(appt.patient_id) else appt.patient_id
+    notify_user(
+        user_id=peer_id,
+        type='appointment_cancelled',
+        title='Appointment cancelled',
+        body=f'The appointment on {appt.scheduled_start.strftime("%b %d, %I:%M %p")} was cancelled.',
+        data={'appointment_id': str(appt.id)},
+    )
     return Response(AppointmentSerializer(appt).data)
 
 @api_view(['GET'])
@@ -176,7 +197,12 @@ def get_ice_servers(request):
 
     # CoTurn uses UTC unix timestamp for time-limited credentials
     expiry_time = int(time.time()) + 86400  # 24 hours
-    username = f"{expiry_time}:{request.user.id}" # Standard format: timestamp:username
+
+    call_attempt_id = request.GET.get('call_attempt_id')
+    if call_attempt_id:
+        username = f"{expiry_time}:{request.user.id}:{call_attempt_id}"
+    else:
+        username = f"{expiry_time}:{request.user.id}"  # Standard format: timestamp:username
 
     # Generate HMAC-SHA1 signature as the password
     secret = settings.COTURN_SECRET.encode('utf-8')
