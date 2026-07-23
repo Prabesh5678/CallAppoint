@@ -233,7 +233,21 @@ class _VideoCallScreenState extends ConsumerState<VideoCallScreen> {
       final data = jsonDecode(event);
       switch (data['type']) {
         case 'ready':
-          await _createOffer();
+          // FIX: Glare handling with "Polite/Impolite" peer logic.
+          // Patient = Impolite (always initiates offer when ready).
+          // Doctor = Polite (waits for offer, but sends ready back if they were already there).
+          final userProfile = ref.read(currentUserProfileProvider).valueOrNull;
+          final isPatient = userProfile?['role'] == 'patient';
+
+          if (isPatient) {
+            debugPrint('Signaling: Received ready, I am patient (Impolite), initiating offer.');
+            await _createOffer();
+          } else {
+            debugPrint('Signaling: Received ready, I am doctor (Polite), acknowledging presence.');
+            // Only send ready back if we are NOT the one who just joined
+            // (The server doesn't echo our own ready back to us, so this is safe).
+            _send({'type': 'ready'});
+          }
           break;
         case 'offer':
           await _pc!.setRemoteDescription(

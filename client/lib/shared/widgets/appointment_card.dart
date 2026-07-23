@@ -68,7 +68,7 @@ class AppointmentCard extends ConsumerWidget {
                 children: [
                   Expanded(
                     child: Text(
-                      otherPartyName ?? 'Unknown',
+                      otherPartyName,
                       style: const TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.w600,

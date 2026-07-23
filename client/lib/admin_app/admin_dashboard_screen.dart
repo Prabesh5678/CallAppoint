@@ -54,9 +54,9 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> wit
       ]);
 
       setState(() {
-        _allPatients = results[0].data;
-        _allDoctors = results[1].data;
-        _allSpecialties = results[2].data;
+        _allPatients = _extractResults(results[0].data);
+        _allDoctors = _extractResults(results[1].data);
+        _allSpecialties = _extractResults(results[2].data);
         _applyFilters();
         _loading = false;
       });
@@ -68,6 +68,13 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> wit
       }
       setState(() => _loading = false);
     }
+  }
+
+  List<dynamic> _extractResults(dynamic data) {
+    if (data is Map && data.containsKey('results')) {
+      return data['results'] as List;
+    }
+    return data as List;
   }
 
   void _applyFilters() {

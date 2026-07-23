@@ -13,9 +13,9 @@ final chatHistoryProvider = FutureProvider.autoDispose
       final response = await DioClient.instance.get(
         '/chat/$appointmentId/history/',
       );
-      return (response.data as List)
-          .map((m) => ChatMessage.fromRest(m))
-          .toList();
+      final data = response.data;
+      final List list = (data is Map && data.containsKey('results')) ? data['results'] : data;
+      return list.map((m) => ChatMessage.fromRest(m)).toList();
     });
 
 class ChatSocket {

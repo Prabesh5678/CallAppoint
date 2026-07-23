@@ -31,7 +31,9 @@ class MyAvailabilityNotifier extends AutoDisposeAsyncNotifier<List<WeeklySlot>> 
   @override
   FutureOr<List<WeeklySlot>> build() async {
     final response = await DioClient.instance.get('/doctors/me/availability/');
-    return (response.data as List).map((s) => WeeklySlot.fromJson(s)).toList();
+    final data = response.data;
+    final List list = (data is Map && data.containsKey('results')) ? data['results'] : data;
+    return list.map((s) => WeeklySlot.fromJson(s)).toList();
   }
 
   void setSlots(List<WeeklySlot> slots) {

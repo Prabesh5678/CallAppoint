@@ -9,7 +9,12 @@ class MyAppointmentsNotifier extends AutoDisposeAsyncNotifier<List<Appointment>>
   @override
   FutureOr<List<Appointment>> build() async {
     final response = await DioClient.instance.get('/appointments/mine/');
-    final list = response.data as List;
+    final data = response.data;
+    if (data is Map && data.containsKey('results')) {
+      final list = data['results'] as List;
+      return list.map((json) => Appointment.fromJson(json)).toList();
+    }
+    final list = data as List;
     return list.map((json) => Appointment.fromJson(json)).toList();
   }
 

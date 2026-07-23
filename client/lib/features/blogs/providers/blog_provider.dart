@@ -32,7 +32,8 @@ class BlogsNotifier extends AutoDisposeAsyncNotifier<List<Blog>> {
       queryParameters: queryParams,
     );
 
-    final list = response.data as List;
+    final data = response.data;
+    final List list = (data is Map && data.containsKey('results')) ? data['results'] : data;
     return list.map((json) => Blog.fromJson(json)).toList();
   }
 
