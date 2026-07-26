@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import '../../shared/widgets/theme_toggle_button.dart';
 import '../../shared/widgets/appointment_card.dart';
 import '../../shared/widgets/pulse_indicator.dart';
@@ -123,6 +124,11 @@ class _DoctorAppointmentsView extends ConsumerWidget {
         appBar: AppBar(
           title: const Text('Appointments'),
           actions: [
+            IconButton(
+              icon: const Icon(Icons.description_outlined),
+              tooltip: 'My Reports',
+              onPressed: () => context.push('/artifacts'),
+            ),
             IconButton(
               icon: const Icon(Icons.refresh),
               tooltip: 'Refresh list',

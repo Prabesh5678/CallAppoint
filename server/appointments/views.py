@@ -192,7 +192,10 @@ def get_ice_servers(request):
     if not settings.COTURN_SECRET:
         # Fallback to public STUN if secret is missing (for safety)
         return Response({
-            'iceServers': [{'urls': ['stun:turn.20-2-129-98.sslip.io:3478']}]
+            'iceServers': [
+                {'urls': ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302']},
+                {'urls': ['stun:turn.20-2-129-98.sslip.io:3478']}
+            ]
         })
 
     # CoTurn uses UTC unix timestamp for time-limited credentials
@@ -213,6 +216,7 @@ def get_ice_servers(request):
 
     return Response({
         'iceServers': [
+            {'urls': ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302']},
             {'urls': ['stun:turn.20-2-129-98.sslip.io:3478']},
             {
                 'urls': [f"turn:{settings.COTURN_URL}:3478"],

@@ -14,6 +14,7 @@ import '../features/video/screens/video_call_screen.dart';
 import '../features/blogs/screens/blog_list_screen.dart';
 import '../features/blogs/screens/blog_detail_screen.dart';
 import '../features/blogs/screens/edit_blog_screen.dart';
+import '../features/appointments/screens/artifact_list_screen.dart';
 import '../admin_app/admin_login_screen.dart';
 import 'supabase_client.dart';
 
@@ -80,6 +81,10 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: '/blogs/:id/edit',
         builder: (context, state) =>
             EditBlogScreen(blogId: state.pathParameters['id']!),
+      ),
+      GoRoute(
+        path: '/artifacts',
+        builder: (context, state) => const ArtifactListScreen(),
       ),
       GoRoute(
         path: '/secret-admin',

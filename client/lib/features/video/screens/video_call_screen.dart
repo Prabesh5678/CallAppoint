@@ -9,6 +9,7 @@ import '../../auth/providers/auth_provider.dart';
 import '../../../core/supabase_client.dart';
 import '../../../core/dio_client.dart';
 import '../../../core/config.dart';
+import '../../appointments/widgets/create_artifact_dialog.dart';
 
 class VideoCallScreen extends ConsumerStatefulWidget {
   final String appointmentId;
@@ -28,6 +29,7 @@ class _VideoCallScreenState extends ConsumerState<VideoCallScreen> {
 
   bool _connecting = true;
   bool _remoteJoined = false;
+  bool _offerInitiated = false; // Flag to prevent double offers
 
   // Controls & Remote state
   bool _micEnabled = true;
@@ -82,7 +84,12 @@ class _VideoCallScreenState extends ConsumerState<VideoCallScreen> {
       _localRenderer.srcObject = _localStream;
 
       // 3. Create Peer Connection with dynamic config
-      _pc = await createPeerConnection(iceConfig);
+      _pc = await createPeerConnection(iceConfig, {
+        'mandatory': {},
+        'optional': [
+          {'DtlsSrtpKeyAgreement': true},
+        ],
+      });
 
       for (var track in _localStream!.getTracks()) {
         await _pc!.addTrack(track, _localStream!);
@@ -99,6 +106,7 @@ class _VideoCallScreenState extends ConsumerState<VideoCallScreen> {
       };
 
       _pc!.onIceCandidate = (candidate) {
+        if (candidate == null) return;
         _send({'type': 'ice', 'candidate': candidate.toMap()});
       };
 
@@ -200,8 +208,8 @@ class _VideoCallScreenState extends ConsumerState<VideoCallScreen> {
     await _addCandidateFromMap(c);
   }
 
-  Future<void> _addCandidateFromMap(Map<String, dynamic> c) async {
-    if (_pc == null) return;
+  Future<void> _addCandidateFromMap(Map<String, dynamic>? c) async {
+    if (_pc == null || c == null) return;
     try {
       await _pc!.addCandidate(
         RTCIceCandidate(c['candidate'], c['sdpMid'], c['sdpMLineIndex']),
@@ -241,12 +249,13 @@ class _VideoCallScreenState extends ConsumerState<VideoCallScreen> {
           final isPatient = userProfile?['role'] == 'patient';
 
           if (isPatient) {
-            debugPrint('Signaling: Received ready, I am patient (Impolite), initiating offer.');
-            await _createOffer();
+            if (!_offerInitiated) {
+              debugPrint('Signaling: Received ready, I am patient (Impolite), initiating offer.');
+              _offerInitiated = true;
+              await _createOffer();
+            }
           } else {
             debugPrint('Signaling: Received ready, I am doctor (Polite), acknowledging presence.');
-            // Only send ready back if we are NOT the one who just joined
-            // (The server doesn't echo our own ready back to us, so this is safe).
             _send({'type': 'ready'});
           }
           break;
@@ -538,6 +547,21 @@ class _VideoCallScreenState extends ConsumerState<VideoCallScreen> {
                             color: _camEnabled ? Colors.white24 : Colors.red,
                             onPressed: _toggleCam,
                           ),
+                          if (ref.watch(currentUserProfileProvider).valueOrNull?['role'] == 'doctor') ...[
+                            const SizedBox(width: 16),
+                            _ControlButton(
+                              icon: Icons.note_add,
+                              color: Colors.blueAccent,
+                              onPressed: () {
+                                showDialog(
+                                  context: context,
+                                  builder: (context) => CreateArtifactDialog(
+                                    appointmentId: widget.appointmentId,
+                                  ),
+                                );
+                              },
+                            ),
+                          ],
                         ],
                       ),
                     ],

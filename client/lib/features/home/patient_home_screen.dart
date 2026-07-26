@@ -105,6 +105,11 @@ class _FindDoctorsTabState extends ConsumerState<_FindDoctorsTab> {
         title: const Text('Find a Doctor'),
         actions: [
           IconButton(
+            icon: const Icon(Icons.description_outlined),
+            tooltip: 'My Reports',
+            onPressed: () => context.push('/artifacts'),
+          ),
+          IconButton(
             icon: const Icon(Icons.medical_services_outlined),
             tooltip: 'Become a Doctor',
             onPressed: () => context.push('/apply-doctor'),
@@ -214,6 +219,11 @@ class _MyAppointmentsTab extends ConsumerWidget {
       appBar: AppBar(
         title: const Text('My Appointments'),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.description_outlined),
+            tooltip: 'My Reports',
+            onPressed: () => context.push('/artifacts'),
+          ),
           IconButton(
             icon: const Icon(Icons.refresh),
             tooltip: 'Refresh list',

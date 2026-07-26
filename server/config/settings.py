@@ -36,6 +36,7 @@ INSTALLED_APPS = [
     'notifications',
     'blogs',
     'adminapi',
+    'artifacts',
 ]
 
 TEMPLATES = [
