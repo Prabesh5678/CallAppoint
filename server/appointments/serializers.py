@@ -10,7 +10,7 @@ class AppointmentSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'patient', 'doctor', 'doctor_name', 'patient_name',
             'scheduled_start', 'scheduled_end', 'status', 'reason_for_visit',
-            'video_room_id', 'cancellation_reason', 'created_at',
+            'video_room_id', 'parent_appointment', 'cancellation_reason', 'created_at',
         ]
         read_only_fields = ['id', 'patient', 'status', 'video_room_id', 'created_at']
 
@@ -18,7 +18,7 @@ class AppointmentSerializer(serializers.ModelSerializer):
 class AppointmentCreateSerializer(serializers.ModelSerializer):
     class Meta:
         model = Appointment
-        fields = ['doctor', 'scheduled_start', 'scheduled_end', 'reason_for_visit']
+        fields = ['doctor', 'scheduled_start', 'scheduled_end', 'reason_for_visit', 'parent_appointment']
 
     def validate(self, data):
         if data['scheduled_end'] <= data['scheduled_start']:

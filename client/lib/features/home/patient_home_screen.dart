@@ -7,6 +7,7 @@ import '../../shared/widgets/appointment_card.dart';
 import '../../shared/widgets/pulse_indicator.dart';
 import '../doctors/providers/doctor_provider.dart';
 import '../appointments/providers/appointment_provider.dart';
+import '../appointments/models/appointment.dart';
 import '../notifications/providers/notification_provider.dart';
 import '../blogs/screens/blog_list_screen.dart';
 
@@ -215,66 +216,96 @@ class _MyAppointmentsTab extends ConsumerWidget {
     final appointmentsAsync = ref.watch(myAppointmentsProvider);
     final actions = ref.read(appointmentActionsProvider);
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('My Appointments'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.description_outlined),
-            tooltip: 'My Reports',
-            onPressed: () => context.push('/artifacts'),
-          ),
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            tooltip: 'Refresh list',
-            onPressed: () => ref.invalidate(myAppointmentsProvider),
-          ),
-          const ThemeToggleButton(),
-        ],
-      ),
-      floatingActionButton: FloatingActionButton(
-        heroTag: 'patient_appointments_refresh_fab',
-        onPressed: () => ref.invalidate(myAppointmentsProvider),
-        tooltip: 'Refresh Appointments',
-        child: const Icon(Icons.refresh),
-      ),
-      body: RefreshIndicator(
-        onRefresh: () async => ref.invalidate(myAppointmentsProvider),
-        child: appointmentsAsync.when(
-          loading: () => const Center(child: CircularProgressIndicator()),
-          error: (e, _) => Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Text('Error: $e'),
-                const SizedBox(height: 16),
-                ElevatedButton.icon(
-                  onPressed: () => ref.invalidate(myAppointmentsProvider),
-                  icon: const Icon(Icons.refresh),
-                  label: const Text('Retry'),
-                ),
-              ],
+    return DefaultTabController(
+      length: 3,
+      child: Scaffold(
+        appBar: AppBar(
+          title: const Text('My Appointments'),
+          actions: [
+            IconButton(
+              icon: const Icon(Icons.description_outlined),
+              tooltip: 'My Reports',
+              onPressed: () => context.push('/artifacts'),
             ),
+            IconButton(
+              icon: const Icon(Icons.refresh),
+              tooltip: 'Refresh list',
+              onPressed: () => ref.invalidate(myAppointmentsProvider),
+            ),
+            const ThemeToggleButton(),
+          ],
+          bottom: const TabBar(
+            tabs: [
+              Tab(text: 'Regular'),
+              Tab(text: 'Follow-up'),
+              Tab(text: 'Past'),
+            ],
           ),
-          data: (appointments) {
-            if (appointments.isEmpty) {
-              return const Center(child: Text('No appointments yet'));
-            }
-            return ListView.builder(
-              padding: const EdgeInsets.symmetric(vertical: 8),
-              itemCount: appointments.length,
-              itemBuilder: (context, index) {
-                final appt = appointments[index];
-                return AppointmentCard(
-                  appointment: appt,
-                  isDoctorView: false,
-                  onCancel: () async {
-                    await actions.cancelWithUndo(appointmentId: appt.id);
+        ),
+        floatingActionButton: FloatingActionButton(
+          heroTag: 'patient_appointments_refresh_fab',
+          onPressed: () => ref.invalidate(myAppointmentsProvider),
+          tooltip: 'Refresh Appointments',
+          child: const Icon(Icons.refresh),
+        ),
+        body: RefreshIndicator(
+          onRefresh: () async => ref.invalidate(myAppointmentsProvider),
+          child: appointmentsAsync.when(
+            loading: () => const Center(child: CircularProgressIndicator()),
+            error: (e, _) => Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text('Error: $e'),
+                  const SizedBox(height: 16),
+                  ElevatedButton.icon(
+                    onPressed: () => ref.invalidate(myAppointmentsProvider),
+                    icon: const Icon(Icons.refresh),
+                    label: const Text('Retry'),
+                  ),
+                ],
+              ),
+            ),
+            data: (appointments) {
+              final regular = appointments
+                  .where((a) => a.status == 'confirmed' && a.parentAppointmentId == null)
+                  .toList();
+              final followups = appointments
+                  .where((a) => a.status == 'confirmed' && a.parentAppointmentId != null)
+                  .toList();
+              final past = appointments
+                  .where((a) => ['completed', 'cancelled', 'rejected', 'no_show'].contains(a.status))
+                  .toList();
+
+              Widget buildList(List<Appointment> list) {
+                if (list.isEmpty) {
+                  return const Center(child: Text('No appointments found'));
+                }
+                return ListView.builder(
+                  padding: const EdgeInsets.symmetric(vertical: 8),
+                  itemCount: list.length,
+                  itemBuilder: (context, index) {
+                    final appt = list[index];
+                    return AppointmentCard(
+                      appointment: appt,
+                      isDoctorView: false,
+                      onCancel: () async {
+                        await actions.cancelWithUndo(appointmentId: appt.id);
+                      },
+                    );
                   },
                 );
-              },
-            );
-          },
+              }
+
+              return TabBarView(
+                children: [
+                  buildList(regular),
+                  buildList(followups),
+                  buildList(past),
+                ],
+              );
+            },
+          ),
         ),
       ),
     );

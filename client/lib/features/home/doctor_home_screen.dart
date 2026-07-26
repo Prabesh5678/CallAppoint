@@ -119,7 +119,7 @@ class _DoctorAppointmentsView extends ConsumerWidget {
     final actions = ref.read(appointmentActionsProvider);
 
     return DefaultTabController(
-      length: 3,
+      length: 4,
       child: Scaffold(
         appBar: AppBar(
           title: const Text('Appointments'),
@@ -137,6 +137,7 @@ class _DoctorAppointmentsView extends ConsumerWidget {
             const ThemeToggleButton(),
           ],
           bottom: TabBar(
+            isScrollable: true,
             tabs: [
               _buildPresenceTab(
                 'Requests',
@@ -145,21 +146,27 @@ class _DoctorAppointmentsView extends ConsumerWidget {
                 (a) => a.status == 'pending',
               ),
               _buildPresenceTab(
-                'Upcoming',
+                'Regular',
                 appointmentsAsync,
                 presenceMap,
-                (a) => a.status == 'confirmed',
+                (a) => a.status == 'confirmed' && a.parentAppointmentId == null,
+              ),
+              _buildPresenceTab(
+                'Follow-up',
+                appointmentsAsync,
+                presenceMap,
+                (a) => a.status == 'confirmed' && a.parentAppointmentId != null,
               ),
               _buildPresenceTab(
                 'Past',
                 appointmentsAsync,
                 presenceMap,
                 (a) => [
-                  'completed',
-                  'cancelled',
-                  'rejected',
-                  'no_show',
-                ].contains(a.status),
+                      'completed',
+                      'cancelled',
+                      'rejected',
+                      'no_show',
+                    ].contains(a.status),
               ),
             ],
           ),
@@ -189,8 +196,10 @@ class _DoctorAppointmentsView extends ConsumerWidget {
           data: (appointments) {
             final pending =
                 appointments.where((a) => a.status == 'pending').toList();
-            final upcoming =
-                appointments.where((a) => a.status == 'confirmed').toList();
+            final upcomingRegular =
+                appointments.where((a) => a.status == 'confirmed' && a.parentAppointmentId == null).toList();
+            final upcomingFollowup =
+                appointments.where((a) => a.status == 'confirmed' && a.parentAppointmentId != null).toList();
             final past = appointments
                 .where(
                   (a) => [
@@ -243,7 +252,8 @@ class _DoctorAppointmentsView extends ConsumerWidget {
             return TabBarView(
               children: [
                 buildList(pending, isPending: true),
-                buildList(upcoming),
+                buildList(upcomingRegular),
+                buildList(upcomingFollowup),
                 buildList(past),
               ],
             );

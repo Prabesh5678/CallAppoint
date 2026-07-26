@@ -9,6 +9,7 @@ class Appointment {
   final String status;
   final String? reasonForVisit;
   final String? videoRoomId;
+  final String? parentAppointmentId;
 
   Appointment({
     required this.id,
@@ -21,6 +22,7 @@ class Appointment {
     required this.status,
     this.reasonForVisit,
     this.videoRoomId,
+    this.parentAppointmentId,
   });
 
   String get displayDoctorName {
@@ -44,6 +46,7 @@ class Appointment {
       status: json['status'],
       reasonForVisit: json['reason_for_visit'],
       videoRoomId: json['video_room_id'],
+      parentAppointmentId: json['parent_appointment'],
     );
   }
 }

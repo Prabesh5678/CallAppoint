@@ -14,11 +14,17 @@ class ArtifactListCreateView(generics.ListCreateAPIView):
 
     def get_queryset(self):
         user = self.request.user
+        queryset = Artifact.objects.none()
         if user.role == 'patient':
-            return Artifact.objects.filter(patient_id=user.id).order_by('-created_at')
+            queryset = Artifact.objects.filter(patient_id=user.id)
         elif user.role == 'doctor':
-            return Artifact.objects.filter(doctor_id=user.id).order_by('-created_at')
-        return Artifact.objects.none()
+            queryset = Artifact.objects.filter(doctor_id=user.id)
+
+        appointment_id = self.request.query_params.get('appointment')
+        if appointment_id:
+            queryset = queryset.filter(appointment_id=appointment_id)
+
+        return queryset.order_by('-created_at')
 
     def perform_create(self, serializer):
         try:

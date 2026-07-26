@@ -52,15 +52,25 @@ class MyAppointmentsView(generics.ListAPIView):
 
 class BookAppointmentView(generics.CreateAPIView):
     serializer_class = AppointmentCreateSerializer
-    permission_classes = [IsAuthenticated, IsPatient]
+    permission_classes = [IsAuthenticated]
 
     @transaction.atomic
     def perform_create(self, serializer):
         data = serializer.validated_data
         doctor_id = data['doctor'].pk
 
-        # Lock the doctor profile to serialize bookings for this doctor
-        # preventing race conditions where two patients book the same slot
+        # Determine the patient and status:
+        # If it's a follow-up booked by a doctor, get the patient from the parent appointment
+        # and auto-confirm since it's initiated by the doctor.
+        parent_appointment = data.get('parent_appointment')
+        status_val = 'pending'
+        if parent_appointment and self.request.user.role == 'doctor':
+            patient_id = parent_appointment.patient_id
+            status_val = 'confirmed'
+        else:
+            patient_id = self.request.user.id
+
+        # Lock the doctor profile to serialize bookings
         DoctorProfile.objects.select_for_update().get(id=doctor_id)
 
         slots = get_available_slots(doctor_id, data['scheduled_start'].date())
@@ -75,7 +85,12 @@ class BookAppointmentView(generics.CreateAPIView):
         if not slot_matches:
             raise ValidationError("Selected slot is no longer available")
 
-        serializer.save(patient_id=self.request.user.id, status='pending')
+        serializer.save(patient_id=patient_id, status=status_val)
+
+        # If auto-confirmed, generate video room
+        if status_val == 'confirmed':
+            serializer.instance.video_room_id = f"callappoint-{serializer.instance.id}"
+            serializer.instance.save()
     
         notify_user(
             user_id=data['doctor'].id_id,
@@ -230,6 +245,14 @@ def get_ice_servers(request):
             },
         ]
     })
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def get_appointment_followups(request, pk):
+    """GET /api/appointments/<uuid>/followups/"""
+    followups = Appointment.objects.filter(parent_appointment_id=pk).order_by('scheduled_start')
+    serializer = AppointmentSerializer(followups, many=True)
+    return Response(serializer.data)
     # LOCAL_COTURN_IP = "192.168.1.75"
     # LOCAL_COTURN_SECRET = "9fbd4867d6ac8a6bcfef49b00d53e71d6822c16696821c7f689146b5a7d331fa"  # from /etc/turnserver.conf
 

@@ -37,6 +37,11 @@ class _CreateArtifactDialogState extends State<CreateArtifactDialog> {
         'title': _titleController.text,
         'content': _contentController.text,
       });
+
+      // Invalidate the provider to refresh the list
+      // Note: we can't easily access ref here since it's a StatefulWidget,
+      // but the caller can handle the refresh if we return true.
+
       if (mounted) {
         Navigator.pop(context, true);
         ScaffoldMessenger.of(context).showSnackBar(

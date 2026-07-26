@@ -29,6 +29,7 @@ dependencies:
   flutter_dotenv: ^6.0.1
   khalti_checkout_flutter: ^1.0.1
   flutter_webrtc: ^1.5.2
+  simple_pip_mode: ^1.1.0
 
 dev_dependencies:
   flutter_test:

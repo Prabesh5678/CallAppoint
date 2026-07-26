@@ -18,6 +18,7 @@ class Appointment(models.Model):
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
     reason_for_visit = models.TextField(null=True, blank=True)
     video_room_id = models.CharField(max_length=255, null=True, blank=True)
+    parent_appointment = models.ForeignKey('self', on_delete=models.SET_NULL, null=True, blank=True, related_name='follow_ups')
     cancelled_by = models.ForeignKey(User, null=True, blank=True, on_delete=models.SET_NULL,
                                       db_column='cancelled_by', related_name='cancelled_appointments')
     cancellation_reason = models.TextField(null=True, blank=True)

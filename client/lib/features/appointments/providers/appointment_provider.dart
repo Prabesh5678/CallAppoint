@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/dio_client.dart';
 import '../../../core/undo_manager.dart';
 import '../models/appointment.dart';
+import 'artifact_provider.dart';
 import '../../notifications/providers/notification_provider.dart';
 
 class MyAppointmentsNotifier extends AutoDisposeAsyncNotifier<List<Appointment>> {
@@ -80,6 +81,27 @@ class AppointmentActions {
         rethrow;
       }
     }
+  }
+
+  Future<void> scheduleFollowup({
+    required String parentAppointmentId,
+    required String doctorId,
+    required DateTime start,
+    required DateTime end,
+    required String reason,
+  }) async {
+    await DioClient.instance.post(
+      '/appointments/book/',
+      data: {
+        'doctor': doctorId,
+        'scheduled_start': start.toIso8601String(),
+        'scheduled_end': end.toIso8601String(),
+        'reason_for_visit': reason,
+        'parent_appointment': parentAppointmentId,
+      },
+    );
+    ref.invalidate(myAppointmentsProvider);
+    ref.invalidate(appointmentArtifactsProvider(parentAppointmentId));
   }
 }
 

@@ -1,15 +1,22 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 import 'package:uuid/uuid.dart';
+import 'package:simple_pip_mode/simple_pip.dart';
+import 'package:simple_pip_mode/pip_widget.dart';
+import 'package:simple_pip_mode/aspect_ratio.dart' as pip;
 import '../../auth/providers/auth_provider.dart';
 import '../../../core/supabase_client.dart';
 import '../../../core/dio_client.dart';
 import '../../../core/config.dart';
 import '../../appointments/widgets/create_artifact_dialog.dart';
+import '../../appointments/widgets/artifact_list_overlay.dart';
+import '../../appointments/providers/artifact_provider.dart';
+import '../widgets/call_controls.dart';
 
 class VideoCallScreen extends ConsumerStatefulWidget {
   final String appointmentId;
@@ -19,7 +26,7 @@ class VideoCallScreen extends ConsumerStatefulWidget {
   ConsumerState<VideoCallScreen> createState() => _VideoCallScreenState();
 }
 
-class _VideoCallScreenState extends ConsumerState<VideoCallScreen> {
+class _VideoCallScreenState extends ConsumerState<VideoCallScreen> with WidgetsBindingObserver {
   final _localRenderer = RTCVideoRenderer();
   final _remoteRenderer = RTCVideoRenderer();
   final String callAttemptId = const Uuid().v4();
@@ -36,6 +43,9 @@ class _VideoCallScreenState extends ConsumerState<VideoCallScreen> {
   bool _camEnabled = true;
   bool _remoteMicEnabled = true;
   bool _remoteCamEnabled = true;
+
+  bool _showArtifacts = false;
+  bool _isInPipMode = false;
 
   // Diagnostic Stats
   Timer? _statsPollTimer;
@@ -61,7 +71,15 @@ class _VideoCallScreenState extends ConsumerState<VideoCallScreen> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _init();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.paused) {
+      _enterPipMode();
+    }
   }
 
   Future<void> _init() async {
@@ -114,6 +132,10 @@ class _VideoCallScreenState extends ConsumerState<VideoCallScreen> {
         debugPrint('PeerConnection state: $state');
         if (state == RTCPeerConnectionState.RTCPeerConnectionStateConnected) {
           _startStatsPolling();
+        } else if (state == RTCPeerConnectionState.RTCPeerConnectionStateDisconnected ||
+            state == RTCPeerConnectionState.RTCPeerConnectionStateFailed ||
+            state == RTCPeerConnectionState.RTCPeerConnectionStateClosed) {
+          _hangUp();
         }
       };
 
@@ -287,10 +309,20 @@ class _VideoCallScreenState extends ConsumerState<VideoCallScreen> {
           setState(() => _remoteCamEnabled = data['enabled']);
           break;
         case 'bye':
+          setState(() {
+            _remoteJoined = false;
+            _remoteRenderer.srcObject = null;
+          });
           _hangUp();
           break;
       }
-    }, onError: (e) => debugPrint('Signaling error: $e'));
+    }, onError: (e) {
+      debugPrint('Signaling error: $e');
+      _hangUp();
+    }, onDone: () {
+      debugPrint('Signaling closed');
+      _hangUp();
+    });
 
     _send({'type': 'ready'});
     setState(() => _connecting = false);
@@ -305,6 +337,19 @@ class _VideoCallScreenState extends ConsumerState<VideoCallScreen> {
 
   void _send(Map<String, dynamic> data) {
     _channel?.sink.add(jsonEncode(data));
+  }
+
+  void _enterPipMode() async {
+    try {
+      final isSupported = await SimplePip.isPipAvailable;
+      if (isSupported) {
+        SimplePip().enterPipMode(
+          aspectRatio: (9, 16),
+        );
+      }
+    } catch (e) {
+      debugPrint('Error entering PiP mode: $e');
+    }
   }
 
   void _toggleMic() {
@@ -342,6 +387,7 @@ class _VideoCallScreenState extends ConsumerState<VideoCallScreen> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _statsPollTimer?.cancel();
     _localRenderer.dispose();
     _remoteRenderer.dispose();
@@ -354,243 +400,209 @@ class _VideoCallScreenState extends ConsumerState<VideoCallScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.black,
-      body: _connecting
-          ? const Center(child: CircularProgressIndicator(color: Colors.white))
-          : Stack(
-              children: [
-                // Remote Video
-                Positioned.fill(
-                  child: !_remoteJoined
-                      ? const Center(
-                          child: Text(
-                            'Waiting for the other person...',
-                            style: TextStyle(color: Colors.white70),
-                          ),
-                        )
-                      : Stack(
-                          children: [
-                            RTCVideoView(
-                              _remoteRenderer,
-                              objectFit: RTCVideoViewObjectFit
-                                  .RTCVideoViewObjectFitCover,
+    return WillPopScope(
+      onWillPop: () async {
+        _enterPipMode();
+        return false;
+      },
+      child: PipWidget(
+        onPipEntered: () => setState(() => _isInPipMode = true),
+        onPipExited: () => setState(() => _isInPipMode = false),
+        pipChild: Scaffold(
+          backgroundColor: Colors.black,
+          body: RTCVideoView(
+            _remoteRenderer,
+            objectFit: RTCVideoViewObjectFit.RTCVideoViewObjectFitCover,
+          ),
+        ),
+        child: Scaffold(
+          backgroundColor: Colors.black,
+          body: _connecting
+              ? const Center(child: CircularProgressIndicator(color: Colors.white))
+              : Stack(
+                  children: [
+                    // Remote Video
+                    Positioned.fill(
+                      child: !_remoteJoined
+                          ? const Center(
+                              child: Text(
+                                'Waiting for the other person...',
+                                style: TextStyle(color: Colors.white70),
+                              ),
+                            )
+                          : Stack(
+                              children: [
+                                RTCVideoView(
+                                  _remoteRenderer,
+                                  objectFit: RTCVideoViewObjectFit
+                                      .RTCVideoViewObjectFitCover,
+                                ),
+                                if (!_remoteCamEnabled)
+                                  Container(
+                                    color: Colors.black87,
+                                    child: const Center(
+                                      child: Column(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Icon(
+                                            Icons.videocam_off,
+                                            color: Colors.white54,
+                                            size: 80,
+                                          ),
+                                          SizedBox(height: 16),
+                                          Text(
+                                            'Remote camera is off',
+                                            style: TextStyle(
+                                              color: Colors.white54,
+                                              fontSize: 18,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                if (!_remoteMicEnabled && !_isInPipMode)
+                                  Positioned(
+                                    top: 40,
+                                    left: 16,
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 12,
+                                        vertical: 6,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: Colors.redAccent.withOpacity(0.8),
+                                        borderRadius: BorderRadius.circular(20),
+                                      ),
+                                      child: const Row(
+                                        children: [
+                                          Icon(
+                                            Icons.mic_off,
+                                            color: Colors.white,
+                                            size: 16,
+                                          ),
+                                          SizedBox(width: 6),
+                                          Text(
+                                            'Remote muted',
+                                            style: TextStyle(
+                                              color: Colors.white,
+                                              fontWeight: FontWeight.bold,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                              ],
                             ),
-                            if (!_remoteCamEnabled)
-                              Container(
-                                color: Colors.black87,
-                                child: const Center(
-                                  child: Column(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      Icon(
-                                        Icons.videocam_off,
-                                        color: Colors.white54,
-                                        size: 80,
-                                      ),
-                                      SizedBox(height: 16),
-                                      Text(
-                                        'Remote camera is off',
-                                        style: TextStyle(
-                                          color: Colors.white54,
-                                          fontSize: 18,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                            if (!_remoteMicEnabled)
-                              Positioned(
-                                top: 40,
-                                left: 16,
-                                child: Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 12,
-                                    vertical: 6,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: Colors.redAccent.withOpacity(0.8),
-                                    borderRadius: BorderRadius.circular(20),
-                                  ),
-                                  child: const Row(
-                                    children: [
-                                      Icon(
-                                        Icons.mic_off,
-                                        color: Colors.white,
-                                        size: 16,
-                                      ),
-                                      SizedBox(width: 6),
-                                      Text(
-                                        'Remote muted',
-                                        style: TextStyle(
-                                          color: Colors.white,
-                                          fontWeight: FontWeight.bold,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                          ],
-                        ),
-                ),
-
-                // Local Video Preview
-                if (_camEnabled)
-                  Positioned(
-                    top: 40,
-                    right: 16,
-                    width: 110,
-                    height: 150,
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(12),
-                      child: RTCVideoView(_localRenderer, mirror: true),
                     ),
-                  ),
 
-                // Control Buttons & Diagnostic Overlay
-                Positioned(
-                  bottom: 40,
-                  left: 0,
-                  right: 0,
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      if (_showStatsOverlay)
-                        Container(
-                          margin: const EdgeInsets.only(bottom: 12),
-                          padding: const EdgeInsets.all(12),
+                    // Local Video Preview
+                    if (_camEnabled && !_isInPipMode)
+                      Positioned(
+                        top: 50,
+                        right: 20,
+                        width: 120,
+                        height: 180,
+                        child: Container(
                           decoration: BoxDecoration(
-                            color: Colors.black87,
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(color: Colors.white24),
-                          ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Text(
-                                'Method: $_connectionMethod',
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                              const SizedBox(height: 4),
-                              Text(
-                                'Latency: ${_latencyMs.toStringAsFixed(0)} ms',
-                                style: const TextStyle(
-                                  color: Colors.white70,
-                                  fontSize: 12,
-                                ),
-                              ),
-                              Text(
-                                'Bandwidth: ${_bitrateMbps.toStringAsFixed(2)} Mbps',
-                                style: const TextStyle(
-                                  color: Colors.white70,
-                                  fontSize: 12,
-                                ),
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(color: Colors.white24, width: 2),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withOpacity(0.3),
+                                blurRadius: 10,
                               ),
                             ],
                           ),
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(14),
+                            child: RTCVideoView(_localRenderer, mirror: true),
+                          ),
                         ),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          // Diagnostic Button
-                          MouseRegion(
-                            onEnter: (_) =>
-                                setState(() => _showStatsOverlay = true),
-                            onExit: (_) =>
-                                setState(() => _showStatsOverlay = false),
-                            child: GestureDetector(
-                              onTap: () => setState(
-                                () => _showStatsOverlay = !_showStatsOverlay,
-                              ),
-                              onLongPressStart: (_) =>
-                                  setState(() => _showStatsOverlay = true),
-                              onLongPressEnd: (_) =>
-                                  setState(() => _showStatsOverlay = false),
-                              child: CircleAvatar(
-                                radius: 24,
-                                backgroundColor: _showStatsOverlay
-                                    ? Colors.blueAccent
-                                    : Colors.white12,
-                                child: const Icon(
-                                  Icons.analytics_outlined,
-                                  color: Colors.white,
-                                  size: 20,
+                      ),
+
+                    // Artifacts Overlay
+                    if (_showArtifacts && !_isInPipMode)
+                      Align(
+                        alignment: Alignment.bottomCenter,
+                        child: ArtifactListOverlay(
+                          appointmentId: widget.appointmentId,
+                          onClose: () => setState(() => _showArtifacts = false),
+                        ),
+                      ),
+
+                    // Control Buttons & Diagnostic Overlay
+                    if (!_isInPipMode)
+                      Positioned(
+                        bottom: 30,
+                        left: 0,
+                        right: 0,
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            if (_showStatsOverlay)
+                              ClipRRect(
+                                borderRadius: BorderRadius.circular(16),
+                                child: BackdropFilter(
+                                  filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+                                  child: Container(
+                                    margin: const EdgeInsets.only(bottom: 20),
+                                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                                    decoration: BoxDecoration(
+                                      color: Colors.black54,
+                                      border: Border.all(color: Colors.white10),
+                                    ),
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Text(
+                                          'Method: $_connectionMethod',
+                                          style: const TextStyle(
+                                            color: Colors.white,
+                                            fontSize: 13,
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        ),
+                                        const SizedBox(height: 4),
+                                        Text(
+                                          'Latency: ${_latencyMs.toStringAsFixed(0)} ms',
+                                          style: const TextStyle(
+                                            color: Colors.white70,
+                                            fontSize: 12,
+                                          ),
+                                        ),
+                                        Text(
+                                          'Bandwidth: ${_bitrateMbps.toStringAsFixed(2)} Mbps',
+                                          style: const TextStyle(
+                                            color: Colors.white70,
+                                            fontSize: 12,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
                                 ),
                               ),
-                            ),
-                          ),
-                          const SizedBox(width: 16),
-                          _ControlButton(
-                            icon: _micEnabled ? Icons.mic : Icons.mic_off,
-                            color: _micEnabled ? Colors.white24 : Colors.red,
-                            onPressed: _toggleMic,
-                          ),
-                          const SizedBox(width: 16),
-                          FloatingActionButton(
-                            heroTag: 'hangup',
-                            backgroundColor: Colors.red,
-                            onPressed: _hangUp,
-                            child: const Icon(Icons.call_end),
-                          ),
-                          const SizedBox(width: 16),
-                          _ControlButton(
-                            icon: _camEnabled
-                                ? Icons.videocam
-                                : Icons.videocam_off,
-                            color: _camEnabled ? Colors.white24 : Colors.red,
-                            onPressed: _toggleCam,
-                          ),
-                          if (ref.watch(currentUserProfileProvider).valueOrNull?['role'] == 'doctor') ...[
-                            const SizedBox(width: 16),
-                            _ControlButton(
-                              icon: Icons.note_add,
-                              color: Colors.blueAccent,
-                              onPressed: () {
-                                showDialog(
-                                  context: context,
-                                  builder: (context) => CreateArtifactDialog(
-                                    appointmentId: widget.appointmentId,
-                                  ),
-                                );
-                              },
+                            CallControls(
+                              appointmentId: widget.appointmentId,
+                              micEnabled: _micEnabled,
+                              camEnabled: _camEnabled,
+                              showStatsOverlay: _showStatsOverlay,
+                              showArtifacts: _showArtifacts,
+                              onToggleMic: _toggleMic,
+                              onToggleCam: _toggleCam,
+                              onToggleStats: () => setState(() => _showStatsOverlay = !_showStatsOverlay),
+                              onToggleArtifacts: () => setState(() => _showArtifacts = !_showArtifacts),
+                              onHangUp: _hangUp,
                             ),
                           ],
-                        ],
+                        ),
                       ),
-                    ],
-                  ),
+                  ],
                 ),
-              ],
-            ),
-    );
-  }
-}
-
-class _ControlButton extends StatelessWidget {
-  final IconData icon;
-  final Color color;
-  final VoidCallback onPressed;
-  const _ControlButton({
-    required this.icon,
-    required this.color,
-    required this.onPressed,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return CircleAvatar(
-      radius: 28,
-      backgroundColor: color,
-      child: IconButton(
-        icon: Icon(icon, color: Colors.white),
-        onPressed: onPressed,
+        ),
       ),
     );
   }

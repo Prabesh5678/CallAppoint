@@ -26,9 +26,12 @@ class DoctorListSerializer(serializers.ModelSerializer):
         ]
 
     def get_specialties(self, obj):
-        return SpecialtySerializer(
-            [ds.specialty for ds in obj.doctor_specialties.all()], many=True
-        ).data
+        try:
+            return SpecialtySerializer(
+                [ds.specialty for ds in obj.doctor_specialties.all()], many=True
+            ).data
+        except AttributeError:
+            return SpecialtySerializer([obj.doctor_specialties.specialty], many=True).data
 
 
 class DoctorDetailSerializer(serializers.ModelSerializer):
@@ -47,9 +50,12 @@ class DoctorDetailSerializer(serializers.ModelSerializer):
         ]
 
     def get_specialties(self, obj):
-        return SpecialtySerializer(
-            [ds.specialty for ds in obj.doctor_specialties.all()], many=True
-        ).data
+        try:
+            return SpecialtySerializer(
+                [ds.specialty for ds in obj.doctor_specialties.all()], many=True
+            ).data
+        except AttributeError:
+            return SpecialtySerializer([obj.doctor_specialties.specialty], many=True).data
 
 
 class DoctorProfileUpdateSerializer(serializers.ModelSerializer):
@@ -67,7 +73,10 @@ class DoctorProfileUpdateSerializer(serializers.ModelSerializer):
         read_only_fields = ['verification_status']
 
     def get_current_specialty_ids(self, obj):
-        return [ds.specialty_id for ds in obj.doctor_specialties.all()]
+        try:
+            return [ds.specialty_id for ds in obj.doctor_specialties.all()]
+        except AttributeError:
+            return [obj.doctor_specialties.specialty_id]
 
 
 class DoctorApplicationSerializer(serializers.ModelSerializer):
