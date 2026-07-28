@@ -1,3 +1,4 @@
+from datetime import datetime
 from rest_framework import viewsets, generics, filters
 from rest_framework.exceptions import ValidationError
 from django.db import transaction
@@ -48,6 +49,42 @@ class DoctorListView(generics.ListAPIView):
             qs = qs.filter(consultation_fee__gte=min_fee)
         if max_fee:
             qs = qs.filter(consultation_fee__lte=max_fee)
+
+        # New filters for availability
+        date_str = self.request.query_params.get('date')
+        time_str = self.request.query_params.get('time')
+
+        if date_str:
+            try:
+                date_obj = datetime.strptime(date_str, '%Y-%m-%d').date()
+
+                # Exclude doctors who are marked as "full day off" on this date
+                from .models import DoctorAvailabilityException
+                full_day_off = DoctorAvailabilityException.objects.filter(
+                    date=date_obj,
+                    is_unavailable=True,
+                    start_time__isnull=True
+                ).values_list('doctor_id', flat=True)
+                qs = qs.exclude(id__in=full_day_off)
+
+                day_of_week = (date_obj.weekday() + 1) % 7
+
+                # Filter doctors who have a routine shift on this day of week
+                available_shifts = DoctorAvailability.objects.filter(
+                    day_of_week=day_of_week,
+                    is_active=True
+                )
+
+                if time_str:
+                    time_obj = datetime.strptime(time_str, '%H:%M').time()
+                    available_shifts = available_shifts.filter(
+                        start_time__lte=time_obj,
+                        end_time__gt=time_obj
+                    )
+
+                qs = qs.filter(availability__in=available_shifts)
+            except ValueError:
+                pass
 
         return qs.distinct()
 

@@ -167,8 +167,10 @@ class VideoSignalConsumer(BaseConsumer):
         self.call_attempt_id = cache.get(call_attempt_id_key) or new_id
 
         # Send it to the user who just connected
+        # Sending both to ensure compatibility and unified COTURN logs
         await self.send(text_data=json.dumps({
             'type': 'connection_info',
+            'callAttemptId': self.call_attempt_id,
             'call_attempt_id': self.call_attempt_id
         }))
 
@@ -256,6 +258,7 @@ class VideoSignalConsumer(BaseConsumer):
                     'appointment_id': self.appointment_id,
                     'role': self.user['role'],
                     'is_present': is_joining,
+                    'callAttemptId': getattr(self, 'call_attempt_id', None),
                     'call_attempt_id': getattr(self, 'call_attempt_id', None)
                 }
             }
