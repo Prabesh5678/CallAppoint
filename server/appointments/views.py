@@ -195,18 +195,17 @@ def get_appointment_followups(request, pk):
 @permission_classes([IsAuthenticated])
 def get_ice_servers(request):
     if not settings.COTURN_SECRET:
-        return Response({
-            'iceServers': [
-                {'urls': ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302']},
-                {'urls': ['stun:turn.20-2-129-98.sslip.io:3478']}
-            ]
-        })
+        raise ValidationError("TURN configuration is missing on the server.")
 
-    expiry_time = int(time.time()) + 86400
+    appointment_id = request.GET.get('appointment_id')
     call_attempt_id = request.GET.get('call_attempt_id')
-    username = f"{expiry_time}:{request.user.id}"
-    if call_attempt_id:
-        username = f"{username}:{call_attempt_id}"
+
+    if not appointment_id or not call_attempt_id:
+        raise ValidationError("Both appointment_id and call_attempt_id are required for TURN credentials.")
+
+    # Strict 3-part format: {timestamp}:{appointmentId}:{callAttemptId}
+    expiry_time = int(time.time()) + 86400
+    username = f"{expiry_time}:{appointment_id}:{call_attempt_id}"
 
     secret = settings.COTURN_SECRET.encode('utf-8')
     message = username.encode('utf-8')
@@ -216,7 +215,7 @@ def get_ice_servers(request):
     return Response({
         'iceServers': [
             {'urls': ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302']},
-            {'urls': ['stun:turn.20-2-129-98.sslip.io:3478']},
+            {'urls': [f"stun:{settings.COTURN_URL}:3478"]},
             {
                 'urls': [f"turn:{settings.COTURN_URL}:3478"],
                 'username': username,
