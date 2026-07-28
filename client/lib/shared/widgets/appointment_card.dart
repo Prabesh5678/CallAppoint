@@ -3,6 +3,7 @@ import 'package:intl/intl.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../features/appointments/models/appointment.dart';
 import '../../features/appointments/providers/appointment_provider.dart';
+import '../../core/globals.dart';
 import 'package:go_router/go_router.dart';
 import 'pulse_indicator.dart';
 
@@ -53,6 +54,8 @@ class AppointmentCard extends ConsumerWidget {
       orElse: () => false,
     );
 
+    final isActiveCall = ref.watch(activeCallIdProvider) == appointment.id;
+
     return Card(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
       child: InkWell(
@@ -63,6 +66,8 @@ class AppointmentCard extends ConsumerWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              // ... existing code ...
+              // (I'll use a larger block to match)
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
@@ -102,7 +107,7 @@ class AppointmentCard extends ConsumerWidget {
                 style: TextStyle(color: Theme.of(context).hintColor),
               ),
 
-              if (isOtherWaiting && appointment.status == 'confirmed') ...[
+              if (isOtherWaiting && appointment.status == 'confirmed' && !isActiveCall) ...[
                 const SizedBox(height: 12),
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),

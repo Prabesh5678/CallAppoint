@@ -9,7 +9,6 @@ import '../appointments/models/appointment.dart';
 import '../doctors/screens/availability_screen_body.dart';
 import '../notifications/providers/notification_provider.dart';
 import '../blogs/screens/blog_list_screen.dart';
-
 import '../auth/screens/profile_screen.dart';
 
 class DoctorHomeScreen extends ConsumerStatefulWidget {
@@ -27,7 +26,6 @@ class _DoctorHomeScreenState extends ConsumerState<DoctorHomeScreen> {
     final presenceMap = ref.watch(notificationManagerProvider);
     final appointmentsAsync = ref.watch(myAppointmentsProvider);
 
-    // Check if any appointment has active presence for the bottom nav dot
     final hasAnyPresence = appointmentsAsync.maybeWhen(
       data: (list) => list.any((a) => presenceMap[a.id] == true),
       orElse: () => false,

@@ -31,7 +31,7 @@ class BlogViewSet(viewsets.ModelViewSet):
         if my_doctors_only and hasattr(self.request.user, 'role') and self.request.user.role == 'patient':
             # Get IDs of doctors the patient has had appointments with
             doctor_ids = Appointment.objects.filter(patient_id=self.request.user.id).values_list('doctor_id', flat=True).distinct()
-            queryset = queryset.filter(doctor_id__in=doctor_ids)
+            queryset = queryset.filter(doctor_id__in=doctor_ids).select_related('doctor__id')
 
         # Filter by "My Own Blogs" for doctors
         my_blogs_only = self.request.query_params.get('my_blogs', 'false').lower() == 'true'

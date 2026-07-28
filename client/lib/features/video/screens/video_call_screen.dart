@@ -8,12 +8,13 @@ import 'package:web_socket_channel/web_socket_channel.dart';
 import 'package:uuid/uuid.dart';
 import 'package:simple_pip_mode/simple_pip.dart';
 import 'package:simple_pip_mode/pip_widget.dart';
-import 'package:simple_pip_mode/aspect_ratio.dart' as pip;
 import 'package:permission_handler/permission_handler.dart';
 import '../../auth/providers/auth_provider.dart';
 import '../../../core/supabase_client.dart';
 import '../../../core/dio_client.dart';
 import '../../../core/config.dart';
+import '../../../core/globals.dart';
+import '../../notifications/providers/notification_provider.dart';
 import '../../appointments/widgets/create_artifact_dialog.dart';
 import '../../appointments/widgets/artifact_list_overlay.dart';
 import '../../appointments/providers/artifact_provider.dart';
@@ -46,6 +47,7 @@ class _VideoCallScreenState extends ConsumerState<VideoCallScreen> with WidgetsB
 
   bool _showArtifacts = false;
   bool _isInPipMode = false;
+  bool _pipSupported = false;
 
   Timer? _statsPollTimer;
   double _bitrateMbps = 0;
@@ -74,6 +76,22 @@ class _VideoCallScreenState extends ConsumerState<VideoCallScreen> with WidgetsB
 
   Future<void> _init() async {
     try {
+      // Delay provider update to avoid modifying state during widget building
+      Future.microtask(() {
+        if (mounted) {
+          ref.read(activeCallIdProvider.notifier).state = widget.appointmentId;
+        }
+      });
+
+      try {
+        final supported = await SimplePip.isPipAvailable;
+        if (mounted) {
+          setState(() => _pipSupported = supported);
+        }
+      } catch (e) {
+        debugPrint('PiP not supported on this platform: $e');
+      }
+
       final statuses = await [Permission.camera, Permission.microphone].request();
       if (statuses[Permission.camera] != PermissionStatus.granted ||
           statuses[Permission.microphone] != PermissionStatus.granted) {
@@ -191,16 +209,19 @@ class _VideoCallScreenState extends ConsumerState<VideoCallScreen> with WidgetsB
           break;
       }
     }, onError: (e) {
-        debugPrint('Signaling error: $e');
-        // Retry connection instead of exiting
-        Future.delayed(const Duration(seconds: 2), () => _connectSignaling());
+      debugPrint('Signaling error: $e');
+      if (!_connecting) {
+        Future.delayed(const Duration(seconds: 2), () {
+          if (!_connecting && mounted) _connectSignaling();
+        });
+      }
     }, onDone: () {
-        debugPrint('Signaling closed');
-        // Only exit if we haven't entered PiP and it's not a temporary disconnect
-        // But for now, let's try to reconnect if not explicitly hung up
-        if (!_connecting) {
-           Future.delayed(const Duration(seconds: 2), () => _connectSignaling());
-        }
+      debugPrint('Signaling closed');
+      if (!_connecting) {
+        Future.delayed(const Duration(seconds: 2), () {
+          if (!_connecting && mounted) _connectSignaling();
+        });
+      }
     });
 
     _send({'type': 'ready'});
@@ -226,8 +247,9 @@ class _VideoCallScreenState extends ConsumerState<VideoCallScreen> with WidgetsB
 
   void _enterPipMode() async {
     try {
-      if (await SimplePip.isPipAvailable) {
-        SimplePip().enterPipMode(aspectRatio: const (9, 16));
+      if (_pipSupported) {
+        // Use record (9, 16) as it was originally
+        SimplePip().enterPipMode(aspectRatio: (9, 16));
       }
     } catch (e) {
       debugPrint('Error entering PiP mode: $e');
@@ -281,6 +303,9 @@ class _VideoCallScreenState extends ConsumerState<VideoCallScreen> with WidgetsB
 
   void _cleanupAndExit() {
     _connecting = true; // prevent reconnection
+    ref.read(activeCallIdProvider.notifier).state = null;
+    ref.read(notificationManagerProvider.notifier).clearPresence(widget.appointmentId);
+    rootScaffoldMessengerKey.currentState?.clearSnackBars();
     _statsPollTimer?.cancel();
     _localStream?.getTracks().forEach((t) => t.stop());
     _localStream?.dispose();
@@ -347,103 +372,111 @@ class _VideoCallScreenState extends ConsumerState<VideoCallScreen> with WidgetsB
 
   @override
   Widget build(BuildContext context) {
+    final mainContent = Scaffold(
+      backgroundColor: Colors.black,
+      body: _connecting
+          ? const Center(child: CircularProgressIndicator(color: Colors.white))
+          : Stack(
+              children: [
+                Positioned.fill(
+                  child: !_remoteJoined
+                      ? Center(
+                          child: Text(
+                            _channel == null ? 'Connecting...' : 'Waiting for the other person...',
+                            style: const TextStyle(color: Colors.white70),
+                          ),
+                        )
+                      : Stack(
+                          children: [
+                            RTCVideoView(_remoteRenderer, objectFit: RTCVideoViewObjectFit.RTCVideoViewObjectFitCover),
+                            if (!_remoteCamEnabled)
+                              Container(color: Colors.black87, child: const Center(child: Icon(Icons.videocam_off, color: Colors.white54, size: 80))),
+                          ],
+                        ),
+                ),
+                if (_camEnabled && !_isInPipMode)
+                  Positioned(
+                    top: 50, right: 20, width: 120, height: 180,
+                    child: Container(
+                      decoration: BoxDecoration(borderRadius: BorderRadius.circular(16), border: Border.all(color: Colors.white24, width: 2)),
+                      child: ClipRRect(borderRadius: BorderRadius.circular(14), child: RTCVideoView(_localRenderer, mirror: true)),
+                    ),
+                  ),
+                if (_showArtifacts && !_isInPipMode)
+                  Align(
+                    alignment: Alignment.bottomCenter,
+                    child: ArtifactListOverlay(
+                      appointmentId: widget.appointmentId,
+                      onClose: () => setState(() => _showArtifacts = false),
+                    ),
+                  ),
+                if (!_isInPipMode)
+                  Positioned(
+                    bottom: 30, left: 0, right: 0,
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (_showStatsOverlay)
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(16),
+                            child: BackdropFilter(
+                              filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+                              child: Container(
+                                margin: const EdgeInsets.only(bottom: 20),
+                                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                                decoration: BoxDecoration(color: Colors.black54, border: Border.all(color: Colors.white10)),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Text('Latency: ${_latencyMs.toStringAsFixed(0)} ms', style: const TextStyle(color: Colors.white70, fontSize: 12)),
+                                    Text('Bandwidth: ${_bitrateMbps.toStringAsFixed(2)} Mbps', style: const TextStyle(color: Colors.white70, fontSize: 12)),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                        CallControls(
+                          appointmentId: widget.appointmentId,
+                          micEnabled: _micEnabled,
+                          camEnabled: _camEnabled,
+                          onSwitchCamera: _switchCamera,
+                          showStatsOverlay: _showStatsOverlay,
+                          showArtifacts: _showArtifacts,
+                          onToggleMic: _toggleMic,
+                          onToggleCam: _toggleCam,
+                          onToggleStats: () => setState(() => _showStatsOverlay = !_showStatsOverlay),
+                          onToggleArtifacts: () => setState(() => _showArtifacts = !_showArtifacts),
+                          onHangUp: _hangUp,
+                        ),
+                      ],
+                    ),
+                  ),
+              ],
+            ),
+    );
+
     return PopScope(
       canPop: false,
       onPopInvoked: (didPop) {
         if (didPop) return;
-        _enterPipMode();
+        if (_pipSupported) {
+          _enterPipMode();
+        } else {
+          _hangUp(); // Fallback: just exit if PiP isn't supported
+        }
       },
-      child: PipWidget(
-        onPipEntered: () => setState(() => _isInPipMode = true),
-        onPipExited: () => setState(() => _isInPipMode = false),
-        pipChild: Scaffold(
-          backgroundColor: Colors.black,
-          body: RTCVideoView(_remoteRenderer, objectFit: RTCVideoViewObjectFit.RTCVideoViewObjectFitCover),
-        ),
-        child: Scaffold(
-          backgroundColor: Colors.black,
-          body: _connecting
-              ? const Center(child: CircularProgressIndicator(color: Colors.white))
-              : Stack(
-                  children: [
-                    Positioned.fill(
-                      child: !_remoteJoined
-                          ? Center(
-                              child: Text(
-                                _channel == null ? 'Connecting...' : 'Waiting for the other person...',
-                                style: const TextStyle(color: Colors.white70),
-                              ),
-                            )
-                          : Stack(
-                              children: [
-                                RTCVideoView(_remoteRenderer, objectFit: RTCVideoViewObjectFit.RTCVideoViewObjectFitCover),
-                                if (!_remoteCamEnabled)
-                                  Container(color: Colors.black87, child: const Center(child: Icon(Icons.videocam_off, color: Colors.white54, size: 80))),
-                              ],
-                            ),
-                    ),
-                    if (_camEnabled && !_isInPipMode)
-                      Positioned(
-                        top: 50, right: 20, width: 120, height: 180,
-                        child: Container(
-                          decoration: BoxDecoration(borderRadius: BorderRadius.circular(16), border: Border.all(color: Colors.white24, width: 2)),
-                          child: ClipRRect(borderRadius: BorderRadius.circular(14), child: RTCVideoView(_localRenderer, mirror: true)),
-                        ),
-                      ),
-                    if (_showArtifacts && !_isInPipMode)
-                      Align(
-                        alignment: Alignment.bottomCenter,
-                        child: ArtifactListOverlay(
-                          appointmentId: widget.appointmentId,
-                          onClose: () => setState(() => _showArtifacts = false),
-                        ),
-                      ),
-                    if (!_isInPipMode)
-                      Positioned(
-                        bottom: 30, left: 0, right: 0,
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            if (_showStatsOverlay)
-                              ClipRRect(
-                                borderRadius: BorderRadius.circular(16),
-                                child: BackdropFilter(
-                                  filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-                                  child: Container(
-                                    margin: const EdgeInsets.only(bottom: 20),
-                                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                                    decoration: BoxDecoration(color: Colors.black54, border: Border.all(color: Colors.white10)),
-                                    child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        Text('Latency: ${_latencyMs.toStringAsFixed(0)} ms', style: const TextStyle(color: Colors.white70, fontSize: 12)),
-                                        Text('Bandwidth: ${_bitrateMbps.toStringAsFixed(2)} Mbps', style: const TextStyle(color: Colors.white70, fontSize: 12)),
-                                      ],
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            CallControls(
-                              appointmentId: widget.appointmentId,
-                              micEnabled: _micEnabled,
-                              camEnabled: _camEnabled,
-                              onSwitchCamera: _switchCamera,
-                              showStatsOverlay: _showStatsOverlay,
-                              showArtifacts: _showArtifacts,
-                              onToggleMic: _toggleMic,
-                              onToggleCam: _toggleCam,
-                              onToggleStats: () => setState(() => _showStatsOverlay = !_showStatsOverlay),
-                              onToggleArtifacts: () => setState(() => _showArtifacts = !_showArtifacts),
-                              onHangUp: _hangUp,
-                            ),
-                          ],
-                        ),
-                      ),
-                  ],
-                ),
-        ),
-      ),
+      child: _pipSupported
+          ? PipWidget(
+              onPipEntered: () => setState(() => _isInPipMode = true),
+              onPipExited: () => setState(() => _isInPipMode = false),
+              pipChild: Scaffold(
+                backgroundColor: Colors.black,
+                body: RTCVideoView(_remoteRenderer, objectFit: RTCVideoViewObjectFit.RTCVideoViewObjectFitCover),
+              ),
+              child: mainContent,
+            )
+          : mainContent,
     );
   }
 }

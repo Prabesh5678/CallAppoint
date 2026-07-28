@@ -168,6 +168,8 @@ class VideoSignalConsumer(BaseConsumer):
             cache_key = f"video_presence_{self.appointment_id}_{self.user['role']}"
             cache.delete(cache_key)
 
+            await self._notify_peer_presence(is_joining=False)
+
             await self.channel_layer.group_send(
                 self.room_group_name,
                 {
@@ -182,6 +184,11 @@ class VideoSignalConsumer(BaseConsumer):
         try:
             data = json.loads(text_data)
             if data.get('type') == 'hangup':
+                # Explicitly clear presence when hangup is received
+                cache_key = f"video_presence_{self.appointment_id}_{self.user['role']}"
+                cache.delete(cache_key)
+                await self._notify_peer_presence(is_joining=False)
+
                 await self.channel_layer.group_send(
                     self.room_group_name,
                     {

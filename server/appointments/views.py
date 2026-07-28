@@ -41,10 +41,13 @@ class MyAppointmentsView(generics.ListAPIView):
 
     def get_queryset(self):
         user = self.request.user
+        # Use select_related to avoid N+1 queries when fetching names in serializer
+        base_qs = Appointment.objects.select_related('doctor__id', 'patient').order_by('-scheduled_start')
+
         if user.role == 'patient':
-            return Appointment.objects.filter(patient_id=user.id).order_by('-scheduled_start')
+            return base_qs.filter(patient_id=user.id)
         elif user.role == 'doctor':
-            return Appointment.objects.filter(doctor_id=user.id).order_by('-scheduled_start')
+            return base_qs.filter(doctor_id=user.id)
         return Appointment.objects.none()
 
 class BookAppointmentView(generics.CreateAPIView):

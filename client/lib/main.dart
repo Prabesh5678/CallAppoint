@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'core/supabase_client.dart';
@@ -8,9 +9,28 @@ import 'core/globals.dart';
 import 'features/notifications/providers/notification_provider.dart';
 
 void main() async {
-  WidgetsFlutterBinding.ensureInitialized();
-  await initSupabase();
-  runApp(const ProviderScope(child: CallAppointApp()));
+  runZonedGuarded(() async {
+    WidgetsFlutterBinding.ensureInitialized();
+
+    // Global Flutter Error Handling
+    FlutterError.onError = (details) {
+      FlutterError.presentError(details);
+      debugPrint('Global Flutter Error: ${details.exceptionAsString()}');
+      // TODO: Integrate with Sentry or Firebase Crashlytics here
+    };
+
+    try {
+      await initSupabase();
+    } catch (e) {
+      debugPrint('Critical: Supabase initialization failed: $e');
+    }
+
+    runApp(const ProviderScope(child: CallAppointApp()));
+  }, (error, stack) {
+    debugPrint('Global Async Error: $error');
+    debugPrint('Stack: $stack');
+    // TODO: Integrate with Sentry or Firebase Crashlytics here
+  });
 }
 
 class CallAppointApp extends ConsumerWidget {

@@ -81,17 +81,25 @@ class NotificationManager extends StateNotifier<Map<String, bool>> {
 
       if (apptId == null) return;
 
-      // PREVENT SPAM: Only act if the presence actually changed
-      final bool wasPresent = state[apptId] ?? false;
-      if (wasPresent == isPresent) return;
+      debugPrint('NotificationManager: Presence for $apptId set to $isPresent by $role');
 
       setPresence(apptId, isPresent);
 
       if (messenger == null) return;
 
       if (isPresent) {
+        // Don't show "waiting" notification if we are already in THIS call
+        // This handles the case where the doctor joins and the patient (already in call)
+        // should NOT get a notification that the doctor is ready.
+        final activeCallId = ref.read(activeCallIdProvider);
+        if (activeCallId == apptId) {
+          debugPrint('NotificationManager: Already in call $apptId, skipping notification');
+          return;
+        }
+
         final roleTitle = role[0].toUpperCase() + role.substring(1);
         messenger.clearSnackBars();
+
         messenger.showSnackBar(
           SnackBar(
             content: Row(
@@ -107,7 +115,7 @@ class NotificationManager extends StateNotifier<Map<String, bool>> {
             closeIconColor: Colors.white,
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
             margin: const EdgeInsets.all(12),
-            duration: const Duration(seconds: 10), // Longer duration for call alerts
+            duration: const Duration(seconds: 6),
             action: SnackBarAction(
               label: 'Join',
               textColor: Colors.white,
@@ -120,6 +128,11 @@ class NotificationManager extends StateNotifier<Map<String, bool>> {
             ),
           ),
         );
+
+        // Forced auto-dismissal after 6 seconds
+        Future.delayed(const Duration(seconds: 6), () {
+          messenger.hideCurrentSnackBar();
+        });
       } else {
         // If presence lost, hide relevant notifications
         messenger.hideCurrentSnackBar();
@@ -169,6 +182,10 @@ class NotificationManager extends StateNotifier<Map<String, bool>> {
     final newState = Map<String, bool>.from(state);
     newState[appointmentId] = isPresent;
     state = newState;
+  }
+
+  void clearPresence(String appointmentId) {
+    setPresence(appointmentId, false);
   }
 }
 
