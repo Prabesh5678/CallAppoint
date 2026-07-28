@@ -74,7 +74,7 @@ DATABASES = {
         'PASSWORD': config('SUPABASE_DB_PASSWORD'),
         'HOST': config('SUPABASE_DB_HOST'),
         'PORT': config('SUPABASE_DB_PORT', default='5432'),
-        'CONN_MAX_AGE': 0,
+        'CONN_MAX_AGE': config('DATABASE_CONN_MAX_AGE', default=60, cast=int),
         'OPTIONS': {
             'keepalives': 1,
             'keepalives_idle': 30,
@@ -97,11 +97,23 @@ REST_FRAMEWORK = {
 
 ASGI_APPLICATION = 'config.asgi.application'
 
-CHANNEL_LAYERS = {
-    'default': {
-        'BACKEND': 'channels.layers.InMemoryChannelLayer',
-    },
-}
+REDIS_URL = config('REDIS_URL', default=None)
+
+if REDIS_URL:
+    CHANNEL_LAYERS = {
+        'default': {
+            'BACKEND': 'channels_redis.core.RedisChannelLayer',
+            'CONFIG': {
+                "hosts": [REDIS_URL],
+            },
+        },
+    }
+else:
+    CHANNEL_LAYERS = {
+        'default': {
+            'BACKEND': 'channels.layers.InMemoryChannelLayer',
+        },
+    }
 
 STATIC_ROOT = BASE_DIR / 'staticfiles'
 STATIC_URL = 'static/'

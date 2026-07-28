@@ -48,6 +48,8 @@ class Doctor {
   final int yearsExperience;
   final double averageRating;
   final int totalReviews;
+  final double totalWeeklyHours;
+  final int requiredWeeklyHours;
   final List<Specialty> specialties;
   final List<WeeklyAvailability> availability;
 
@@ -59,6 +61,8 @@ class Doctor {
     required this.yearsExperience,
     required this.averageRating,
     required this.totalReviews,
+    required this.totalWeeklyHours,
+    required this.requiredWeeklyHours,
     required this.specialties,
     required this.availability,
   });
@@ -81,6 +85,8 @@ class Doctor {
       yearsExperience: json['years_experience'] ?? 0,
       averageRating: double.tryParse(json['average_rating'].toString()) ?? 0,
       totalReviews: json['total_reviews'] ?? 0,
+      totalWeeklyHours: double.tryParse(json['total_weekly_hours'].toString()) ?? 0,
+      requiredWeeklyHours: json['required_weekly_hours'] ?? 20,
       specialties: (json['specialties'] as List? ?? [])
           .map((s) => Specialty.fromJson(s))
           .toList(),

@@ -18,6 +18,15 @@ class _ApplyDoctorScreenState extends ConsumerState<ApplyDoctorScreen> {
   final Set<String> _selectedSpecialties = {};
   bool _loading = false;
 
+  @override
+  void dispose() {
+    _licenseController.dispose();
+    _bioController.dispose();
+    _yearsController.dispose();
+    _feeController.dispose();
+    super.dispose();
+  }
+
   Future<void> _submit() async {
     if (_licenseController.text.trim().isEmpty ||
         _feeController.text.trim().isEmpty) {

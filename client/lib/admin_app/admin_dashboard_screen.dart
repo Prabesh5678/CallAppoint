@@ -26,6 +26,7 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> wit
   // Local Filtering State
   List<dynamic> _filteredDoctors = [];
   String? _selectedSpecialtyId;
+  bool _showUnderFulfilledOnly = false;
 
   bool _loading = true;
   final _divisionController = TextEditingController();
@@ -42,6 +43,13 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> wit
       }
     });
     _loadAll();
+  }
+
+  @override
+  void dispose() {
+    _tabController.dispose();
+    _divisionController.dispose();
+    super.dispose();
   }
 
   Future<void> _loadAll() async {
@@ -79,7 +87,16 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> wit
 
   void _applyFilters() {
     setState(() {
-      final approved = _allDoctors.where((d) => d['verification_status'] == 'approved').toList();
+      var approved = _allDoctors.where((d) => d['verification_status'] == 'approved').toList();
+
+      if (_showUnderFulfilledOnly) {
+        approved = approved.where((d) {
+          final total = (d['total_weekly_hours'] ?? 0).toDouble();
+          final required = (d['required_weekly_hours'] ?? 20).toDouble();
+          return total < required;
+        }).toList();
+      }
+
       if (_selectedSpecialtyId == null) {
         _filteredDoctors = approved;
       } else {
@@ -271,70 +288,120 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> wit
     }
   }
 
+  Future<void> _updateRequiredHours(String doctorId, int hours) async {
+    try {
+      await AdminDioClient.instance.patch('/doctors/$doctorId/hours/', data: {
+        'required_weekly_hours': hours,
+      });
+      _loadAll();
+    } catch (e) {
+      rootScaffoldMessengerKey.currentState?.showSnackBar(
+        SnackBar(content: Text('Failed to update hours: $e'), backgroundColor: Colors.red),
+      );
+    }
+  }
+
   void _showDoctorDetails(Map<String, dynamic> doc) {
     final colorScheme = Theme.of(context).colorScheme;
     final specs = (doc['specialties'] as List?) ?? [];
+    int tempHours = (doc['required_weekly_hours'] ?? 20).toInt();
 
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Doctor Details'),
-        content: SizedBox(
-          width: 500,
-          child: SingleChildScrollView(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Center(
-                  child: CircleAvatar(
-                    radius: 50,
-                    backgroundColor: colorScheme.primaryContainer,
-                    backgroundImage: (doc['avatar_url'] != null && doc['avatar_url'].toString().isNotEmpty)
-                        ? NetworkImage(doc['avatar_url'])
-                        : null,
-                    child: (doc['avatar_url'] == null || doc['avatar_url'].toString().isEmpty)
-                        ? Icon(Icons.person, size: 50, color: colorScheme.primary)
-                        : null,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text('Doctor Details'),
+          content: SizedBox(
+            width: 500,
+            child: SingleChildScrollView(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Center(
+                    child: CircleAvatar(
+                      radius: 50,
+                      backgroundColor: colorScheme.primaryContainer,
+                      backgroundImage: (doc['avatar_url'] != null && doc['avatar_url'].toString().isNotEmpty)
+                          ? NetworkImage(doc['avatar_url'])
+                          : null,
+                      child: (doc['avatar_url'] == null || doc['avatar_url'].toString().isEmpty)
+                          ? Icon(Icons.person, size: 50, color: colorScheme.primary)
+                          : null,
+                    ),
                   ),
-                ),
-                const SizedBox(height: 24),
-                _buildDetailRow('Full Name', doc['full_name']),
-                _buildDetailRow('Specialties', specs.join(', ')),
-                _buildDetailRow('License Number', doc['license_number']),
-                _buildDetailRow('Experience', '${doc['years_experience']} years'),
-                _buildDetailRow('Consultation Fee', 'Rs. ${doc['consultation_fee']}'),
-                _buildDetailRow('Rating', '${doc['average_rating']} (${doc['total_reviews']} reviews)'),
-                _buildDetailRow('Status', doc['verification_status']?.toString().toUpperCase()),
-                _buildDetailRow('Joined', doc['created_at'] != null ? DateFormat('MMM dd, yyyy').format(DateTime.parse(doc['created_at'].toString())) : 'Unknown'),
-                const SizedBox(height: 16),
-                const Text('Bio', style: TextStyle(fontWeight: FontWeight.bold)),
-                const SizedBox(height: 4),
-                Text(doc['bio'] ?? 'No bio provided', style: TextStyle(color: colorScheme.onSurfaceVariant)),
-              ],
+                  const SizedBox(height: 24),
+                  _buildDetailRow('Full Name', doc['full_name']),
+                  _buildDetailRow('Specialties', specs.join(', ')),
+                  _buildDetailRow('License Number', doc['license_number']),
+                  _buildDetailRow('Experience', '${doc['years_experience']} years'),
+                  _buildDetailRow('Consultation Fee', 'Rs. ${doc['consultation_fee']}'),
+                  _buildDetailRow('Rating', '${doc['average_rating']} (${doc['total_reviews']} reviews)'),
+                  _buildDetailRow('Current Weekly Hours', '${doc['total_weekly_hours'] ?? 0}h'),
+
+                  const SizedBox(height: 16),
+                  const Divider(),
+                  const SizedBox(height: 8),
+                  const Text('Weekly Hours Requirement', style: TextStyle(fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Slider(
+                          value: tempHours.toDouble(),
+                          min: 0,
+                          max: 60,
+                          divisions: 12,
+                          label: '$tempHours h',
+                          onChanged: (val) {
+                            setDialogState(() => tempHours = val.toInt());
+                          },
+                        ),
+                      ),
+                      Text('$tempHours h', style: const TextStyle(fontWeight: FontWeight.bold)),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  const Divider(),
+
+                  _buildDetailRow('Status', doc['verification_status']?.toString().toUpperCase()),
+                  _buildDetailRow('Joined', doc['created_at'] != null ? DateFormat('MMM dd, yyyy').format(DateTime.parse(doc['created_at'].toString())) : 'Unknown'),
+                  const SizedBox(height: 16),
+                  const Text('Bio', style: TextStyle(fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 4),
+                  Text(doc['bio'] ?? 'No bio provided', style: TextStyle(color: colorScheme.onSurfaceVariant)),
+                ],
+              ),
             ),
           ),
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Close')),
-          if (doc['verification_status'] == 'pending') ...[
-            TextButton(
-              onPressed: () {
-                Navigator.pop(context);
-                _showRejectDialog(doc['id']);
-              },
-              style: TextButton.styleFrom(foregroundColor: colorScheme.error),
-              child: const Text('Decline'),
-            ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(context), child: const Text('Close')),
             ElevatedButton(
               onPressed: () {
+                _updateRequiredHours(doc['id'], tempHours);
                 Navigator.pop(context);
-                _approveDoctor(doc['id']);
               },
-              child: const Text('Approve'),
+              child: const Text('Save Hours'),
             ),
+            if (doc['verification_status'] == 'pending') ...[
+              TextButton(
+                onPressed: () {
+                  Navigator.pop(context);
+                  _showRejectDialog(doc['id']);
+                },
+                style: TextButton.styleFrom(foregroundColor: colorScheme.error),
+                child: const Text('Decline'),
+              ),
+              ElevatedButton(
+                onPressed: () {
+                  Navigator.pop(context);
+                  _approveDoctor(doc['id']);
+                },
+                child: const Text('Approve'),
+              ),
+            ],
           ],
-        ],
+        ),
       ),
     );
   }
@@ -401,7 +468,7 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> wit
 
   Widget _buildSectionHeader(String title, {Widget? trailing}) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 24),
+      padding: const EdgeInsets.only(top: 8, bottom: 24),
       child: Row(
         children: [
           Text(title, style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold)),
@@ -476,24 +543,41 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> wit
         _buildSectionHeader('Doctor Directory'),
         Padding(
           padding: const EdgeInsets.only(bottom: 20),
-          child: SizedBox(
-            width: 300,
-            child: DropdownButtonFormField<String>(
-              value: _selectedSpecialtyId,
-              decoration: const InputDecoration(
-                labelText: 'Filter by Specialty',
-                border: OutlineInputBorder(),
-                isDense: true,
+          child: Wrap(
+            spacing: 16,
+            runSpacing: 12,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              SizedBox(
+                width: 250,
+                child: DropdownButtonFormField<String>(
+                  value: _selectedSpecialtyId,
+                  decoration: const InputDecoration(
+                    labelText: 'Filter by Specialty',
+                    border: OutlineInputBorder(),
+                    isDense: true,
+                  ),
+                  items: [
+                    const DropdownMenuItem(value: null, child: Text('All Specialties')),
+                    ..._allSpecialties.map((s) => DropdownMenuItem(value: s['id'], child: Text(s['name'] ?? ''))),
+                  ],
+                  onChanged: (val) {
+                    _selectedSpecialtyId = val;
+                    _applyFilters();
+                  },
+                ),
               ),
-              items: [
-                const DropdownMenuItem(value: null, child: Text('All Specialties')),
-                ..._allSpecialties.map((s) => DropdownMenuItem(value: s['id'], child: Text(s['name']))),
-              ],
-              onChanged: (val) {
-                _selectedSpecialtyId = val;
-                _applyFilters();
-              },
-            ),
+              FilterChip(
+                label: const Text('Under Weekly Hours'),
+                selected: _showUnderFulfilledOnly,
+                onSelected: (val) {
+                  setState(() {
+                    _showUnderFulfilledOnly = val;
+                    _applyFilters();
+                  });
+                },
+              ),
+            ],
           ),
         ),
         Expanded(
@@ -504,6 +588,9 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> wit
                   itemBuilder: (context, i) {
                     final doc = _filteredDoctors[i];
                     final specs = (doc['specialties'] as List?) ?? [];
+                    final total = (doc['total_weekly_hours'] ?? 0).toDouble();
+                    final required = (doc['required_weekly_hours'] ?? 20).toInt();
+
                     return Card(
                       margin: const EdgeInsets.only(bottom: 8),
                       elevation: 0,
@@ -513,9 +600,33 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> wit
                       ),
                       child: ListTile(
                         onTap: () => _showDoctorDetails(doc),
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 20),
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
                         title: Text(doc['full_name'] ?? '', style: const TextStyle(fontWeight: FontWeight.bold)),
-                        subtitle: Text('${specs.join(", ")} · ${doc['license_number']}'),
+                        subtitle: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text('${specs.join(", ")} · ${doc['license_number']}'),
+                            const SizedBox(height: 4),
+                            Row(
+                              children: [
+                                Icon(
+                                  Icons.access_time,
+                                  size: 14,
+                                  color: total < required ? Colors.orange : Colors.green,
+                                ),
+                                const SizedBox(width: 4),
+                                Text(
+                                  'Weekly: $total/${required}h',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: total < required ? Colors.orange : Colors.green,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
                         trailing: IconButton(
                           icon: Icon(Icons.delete_outline, color: colorScheme.error),
                           onPressed: () => _removeUser(doc['id'], isDoctor: true),
@@ -575,9 +686,13 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> wit
         _buildSectionHeader('Specialty Divisions'),
         Padding(
           padding: const EdgeInsets.only(bottom: 24),
-          child: Row(
+          child: Wrap(
+            spacing: 12,
+            runSpacing: 12,
+            crossAxisAlignment: WrapCrossAlignment.center,
             children: [
-              Expanded(
+              SizedBox(
+                width: 300,
                 child: TextField(
                   controller: _divisionController,
                   decoration: const InputDecoration(
@@ -590,7 +705,6 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> wit
                   },
                 ),
               ),
-              const SizedBox(width: 12),
               ElevatedButton.icon(
                 onPressed: () {
                   if (_divisionController.text.trim().isNotEmpty) _addSpecialty(_divisionController.text.trim());

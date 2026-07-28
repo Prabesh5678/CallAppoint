@@ -56,13 +56,21 @@ class AdminListDoctorsView(generics.ListAPIView):
         status_filter = self.request.query_params.get('status')
         specialty_filter = self.request.query_params.get('specialty')
 
-        qs = DoctorProfile.objects.select_related('id').prefetch_related('doctor_specialties__specialty').order_by('-created_at')
+        qs = DoctorProfile.objects.select_related('id').prefetch_related('doctor_specialties__specialty', 'availability').order_by('-created_at')
 
         if status_filter:
             qs = qs.filter(verification_status=status_filter)
 
         if specialty_filter:
             qs = qs.filter(doctor_specialties__specialty_id=specialty_filter)
+
+        under_fulfilled = self.request.query_params.get('under_fulfilled')
+        if under_fulfilled == 'true':
+            # Filter in Python for simplicity since total_weekly_hours is a property
+            # For large datasets, this should be an annotation
+            ids = [d.id_id for d in qs if d.total_weekly_hours < d.required_weekly_hours]
+            qs = qs.filter(id_id__in=ids)
+
         return qs
 
     def list(self, request, *args, **kwargs):
@@ -82,6 +90,8 @@ class AdminListDoctorsView(generics.ListAPIView):
                 'total_reviews': d.total_reviews,
                 'avatar_url': d.id.avatar_url,
                 'created_at': d.created_at,
+                'total_weekly_hours': d.total_weekly_hours,
+                'required_weekly_hours': d.required_weekly_hours,
                 'specialties': [ds.specialty.name for ds in d.doctor_specialties.all()]
             }
 
@@ -134,6 +144,28 @@ def reject_doctor(request, doctor_id):
 
     logger.info(f"Admin rejected doctor profile: {doctor_id}. Reason: {reason}")
     return Response({'detail': 'Doctor rejected'})
+
+
+@api_view(['PATCH'])
+@authentication_classes([StaticAdminAuthentication])
+@permission_classes([])
+def update_doctor_hours(request, doctor_id):
+    try:
+        profile = DoctorProfile.objects.get(id=doctor_id)
+    except DoctorProfile.DoesNotExist:
+        return Response({'detail': 'Not found'}, status=404)
+
+    new_hours = request.data.get('required_weekly_hours')
+    if new_hours is not None:
+        profile.required_weekly_hours = int(new_hours)
+        profile.save()
+        logger.info(f"Admin updated weekly hours for {doctor_id} to {new_hours}")
+        return Response({
+            'detail': 'Hours updated',
+            'required_weekly_hours': profile.required_weekly_hours
+        })
+
+    return Response({'detail': 'required_weekly_hours field is required'}, status=status.HTTP_400_BAD_REQUEST)
 
 
 @api_view(['DELETE'])

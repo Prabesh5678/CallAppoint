@@ -18,6 +18,14 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
   String? _error;
   String? _message;
 
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _emailController.dispose();
+    _passwordController.dispose();
+    super.dispose();
+  }
+
   Future<void> _signup() async {
     setState(() {
       _loading = true;

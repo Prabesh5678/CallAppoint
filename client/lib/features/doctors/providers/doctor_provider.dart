@@ -41,3 +41,8 @@ final doctorsProvider = FutureProvider.autoDispose<List<Doctor>>((ref) async {
   final List list = (data is Map && data.containsKey('results')) ? data['results'] : data;
   return list.map((d) => Doctor.fromJson(d)).toList();
 });
+
+final myDoctorProfileProvider = FutureProvider.autoDispose<Doctor>((ref) async {
+  final response = await DioClient.instance.get('/doctors/me/');
+  return Doctor.fromJson(response.data);
+});

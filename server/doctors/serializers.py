@@ -17,12 +17,15 @@ class DoctorListSerializer(serializers.ModelSerializer):
     full_name = serializers.CharField(source='id.full_name', read_only=True)
     avatar_url = serializers.CharField(source='id.avatar_url', read_only=True)
     specialties = serializers.SerializerMethodField()
+    total_weekly_hours = serializers.ReadOnlyField()
+    required_weekly_hours = serializers.IntegerField(read_only=True)
 
     class Meta:
         model = DoctorProfile
         fields = [
             'id', 'full_name', 'avatar_url', 'consultation_fee',
             'years_experience', 'average_rating', 'total_reviews', 'specialties',
+            'total_weekly_hours', 'required_weekly_hours'
         ]
 
     def get_specialties(self, obj):
@@ -47,6 +50,7 @@ class DoctorDetailSerializer(serializers.ModelSerializer):
             'id', 'full_name', 'avatar_url', 'gender', 'bio', 'license_number',
             'years_experience', 'consultation_fee', 'verification_status',
             'average_rating', 'total_reviews', 'specialties', 'availability',
+            'total_weekly_hours', 'required_weekly_hours'
         ]
 
     def get_specialties(self, obj):
@@ -69,8 +73,12 @@ class DoctorProfileUpdateSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = DoctorProfile
-        fields = ['bio', 'years_experience', 'consultation_fee', 'specialty_ids', 'current_specialty_ids', 'license_number', 'verification_status']
-        read_only_fields = ['verification_status']
+        fields = [
+            'bio', 'years_experience', 'consultation_fee', 'specialty_ids',
+            'current_specialty_ids', 'license_number', 'verification_status',
+            'total_weekly_hours', 'required_weekly_hours'
+        ]
+        read_only_fields = ['verification_status', 'total_weekly_hours', 'required_weekly_hours']
 
     def get_current_specialty_ids(self, obj):
         try:

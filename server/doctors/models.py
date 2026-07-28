@@ -17,6 +17,7 @@ class DoctorProfile(models.Model):
                                      db_column='verified_by', related_name='verified_doctors')
     average_rating = models.DecimalField(max_digits=3, decimal_places=2, default=0)
     total_reviews = models.IntegerField(default=0)
+    required_weekly_hours = models.IntegerField(default=20)
     rejection_reason = models.TextField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -30,6 +31,17 @@ class DoctorProfile(models.Model):
         if name.lower().startswith('dr.') or name.lower().startswith('dr '):
             return name
         return f"Dr. {name}"
+
+    @property
+    def total_weekly_hours(self):
+        total_minutes = 0
+        # self.availability is the related_name from DoctorAvailability
+        for slot in self.availability.filter(is_active=True):
+            start = slot.start_time
+            end = slot.end_time
+            duration = (end.hour * 60 + end.minute) - (start.hour * 60 + start.minute)
+            total_minutes += duration
+        return round(total_minutes / 60, 2)
 
 
 class VerificationDocument(models.Model):

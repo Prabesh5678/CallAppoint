@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import '../providers/availability_provider.dart';
+import '../providers/doctor_provider.dart';
 import '../../appointments/providers/appointment_provider.dart';
 import '../../appointments/models/appointment.dart';
 
@@ -23,16 +24,67 @@ class _AvailabilityScreenBodyState
 
   @override
   Widget build(BuildContext context) {
+    final profileAsync = ref.watch(myDoctorProfileProvider);
+
     return DefaultTabController(
       length: 2,
       child: Scaffold(
         appBar: AppBar(
           title: const Text('My Schedule'),
-          bottom: const TabBar(
-            tabs: [
-              Tab(text: 'Current Routine', icon: Icon(Icons.calendar_view_week)),
-              Tab(text: 'Manage Schedule', icon: Icon(Icons.edit_calendar)),
-            ],
+          bottom: PreferredSize(
+            preferredSize: const Size.fromHeight(110),
+            child: Column(
+              children: [
+                profileAsync.when(
+                  data: (doctor) => Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    child: Column(
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              'Weekly Hours: ${doctor.totalWeeklyHours}/${doctor.requiredWeeklyHours}h',
+                              style: const TextStyle(fontWeight: FontWeight.bold),
+                            ),
+                            Text(
+                              '${((doctor.totalWeeklyHours / doctor.requiredWeeklyHours) * 100).clamp(0, 100).toStringAsFixed(0)}%',
+                              style: TextStyle(
+                                color: doctor.totalWeeklyHours < doctor.requiredWeeklyHours
+                                    ? Colors.orange
+                                    : Colors.green,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 4),
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(4),
+                          child: LinearProgressIndicator(
+                            value: doctor.totalWeeklyHours / doctor.requiredWeeklyHours,
+                            backgroundColor: Colors.grey.withOpacity(0.2),
+                            valueColor: AlwaysStoppedAnimation<Color>(
+                              doctor.totalWeeklyHours < doctor.requiredWeeklyHours
+                                  ? Colors.orange
+                                  : Colors.green,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  loading: () => const LinearProgressIndicator(),
+                  error: (_, __) => const SizedBox.shrink(),
+                ),
+                const TabBar(
+                  tabs: [
+                    Tab(text: 'Current Routine', icon: Icon(Icons.calendar_view_week)),
+                    Tab(text: 'Manage Schedule', icon: Icon(Icons.edit_calendar)),
+                  ],
+                ),
+              ],
+            ),
           ),
         ),
         body: TabBarView(
@@ -48,6 +100,7 @@ class _AvailabilityScreenBodyState
                         slotDurationMinutes: duration,
                       );
                   ref.invalidate(myAvailabilityProvider);
+                  ref.invalidate(myDoctorProfileProvider);
                 } catch (e) {
                   // Error handling already in provider/controller or shown via snackbar
                   rethrow;
@@ -388,7 +441,10 @@ class _DayManagementCardState extends ConsumerState<_DayManagementCard> {
                 subtitle: Text('${slot.slotDurationMinutes} min slots'),
                 trailing: IconButton(
                   icon: const Icon(Icons.delete_outline, color: Colors.red, size: 20),
-                  onPressed: () => ref.read(availabilityControllerProvider).deleteWithUndo(slot.id),
+                  onPressed: () async {
+                    await ref.read(availabilityControllerProvider).deleteWithUndo(slot.id);
+                    ref.invalidate(myDoctorProfileProvider);
+                  },
                 ),
               )),
         ],
