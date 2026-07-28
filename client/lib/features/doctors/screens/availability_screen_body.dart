@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:dio/dio.dart';
 import 'package:intl/intl.dart';
 import '../providers/availability_provider.dart';
 import '../../appointments/providers/appointment_provider.dart';
@@ -19,62 +18,8 @@ class AvailabilityScreenBody extends ConsumerStatefulWidget {
 
 class _AvailabilityScreenBodyState
     extends ConsumerState<AvailabilityScreenBody> {
-  int _selectedDay = 1; // default Monday
-  TimeOfDay _startTime = const TimeOfDay(hour: 9, minute: 0);
-  TimeOfDay _endTime = const TimeOfDay(hour: 17, minute: 0);
-  int _slotDuration = 30;
-
   String _fmtTimeOfDay(TimeOfDay t) =>
       '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}:00';
-
-  Future<void> _addSlot() async {
-    final startMinutes = _startTime.hour * 60 + _startTime.minute;
-    final endMinutes = _endTime.hour * 60 + _endTime.minute;
-
-    if (endMinutes <= startMinutes) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('End time must be after start time')),
-        );
-      }
-      return;
-    }
-
-    try {
-      await ref
-          .read(availabilityControllerProvider)
-          .add(
-            dayOfWeek: _selectedDay,
-            startTime: _fmtTimeOfDay(_startTime),
-            endTime: _fmtTimeOfDay(_endTime),
-            slotDurationMinutes: _slotDuration,
-          );
-      ref.invalidate(myAvailabilityProvider);
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('Availability added')));
-      }
-    } catch (e) {
-      String errorMsg = e.toString();
-      if (e is DioException && e.response?.data != null) {
-        final data = e.response!.data;
-        if (data is Map) {
-          errorMsg = data.values.expand((v) => v is List ? v : [v]).join(', ');
-        } else if (data is String) {
-          errorMsg = data;
-        }
-      }
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Failed: $errorMsg'),
-            backgroundColor: Theme.of(context).colorScheme.error,
-          ),
-        );
-      }
-    }
-  }
 
   @override
   Widget build(BuildContext context) {

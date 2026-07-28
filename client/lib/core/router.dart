@@ -54,7 +54,14 @@ final routerProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(
         path: '/video/:appointmentId',
-        builder: (context, state) => VideoCallScreen(appointmentId: state.pathParameters['appointmentId']!),
+        builder: (context, state) {
+          final appointmentId = state.pathParameters['appointmentId']!;
+          final callAttemptId = state.uri.queryParameters['callAttemptId'];
+          return VideoCallScreen(
+            appointmentId: appointmentId,
+            callAttemptId: callAttemptId,
+          );
+        },
       ),
       GoRoute(
         path: '/apply-doctor',

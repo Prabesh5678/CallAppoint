@@ -76,6 +76,7 @@ class NotificationManager extends StateNotifier<Map<String, bool>> {
 
     if (type == 'video_presence') {
       final String? apptId = data['appointment_id']?.toString();
+      final String? callAttemptId = data['call_attempt_id']?.toString();
       final bool isPresent = data['is_present'] == true;
       final String role = data['role'] ?? 'someone';
 
@@ -122,7 +123,11 @@ class NotificationManager extends StateNotifier<Map<String, bool>> {
               onPressed: () {
                 messenger.hideCurrentSnackBar();
                 if (context != null) {
-                  context.push('/video/$apptId');
+                  final uri = Uri(
+                    path: '/video/$apptId',
+                    queryParameters: callAttemptId != null ? {'callAttemptId': callAttemptId} : null,
+                  );
+                  context.push(uri.toString());
                 }
               },
             ),

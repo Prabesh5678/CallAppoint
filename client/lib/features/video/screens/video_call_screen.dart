@@ -22,7 +22,8 @@ import '../widgets/call_controls.dart';
 
 class VideoCallScreen extends ConsumerStatefulWidget {
   final String appointmentId;
-  const VideoCallScreen({super.key, required this.appointmentId});
+  final String? callAttemptId;
+  const VideoCallScreen({super.key, required this.appointmentId, this.callAttemptId});
 
   @override
   ConsumerState<VideoCallScreen> createState() => _VideoCallScreenState();
@@ -31,7 +32,7 @@ class VideoCallScreen extends ConsumerStatefulWidget {
 class _VideoCallScreenState extends ConsumerState<VideoCallScreen> with WidgetsBindingObserver {
   final _localRenderer = RTCVideoRenderer();
   final _remoteRenderer = RTCVideoRenderer();
-  final String callAttemptId = const Uuid().v4();
+  String? callAttemptId;
   RTCPeerConnection? _pc;
   MediaStream? _localStream;
   WebSocketChannel? _channel;
@@ -107,17 +108,36 @@ class _VideoCallScreenState extends ConsumerState<VideoCallScreen> with WidgetsB
       await _localRenderer.initialize();
       await _remoteRenderer.initialize();
 
-      final response = await DioClient.instance.get(
-        '/appointments/ice-servers/',
-        queryParameters: {'call_attempt_id': callAttemptId},
-      );
-      final iceConfig = Map<String, dynamic>.from(response.data);
-
       _localStream = await navigator.mediaDevices.getUserMedia({
         'audio': true,
         'video': {'facingMode': 'user'},
       });
       _localRenderer.srcObject = _localStream;
+
+      if (widget.callAttemptId != null) {
+        callAttemptId = widget.callAttemptId;
+      }
+
+      _connectSignaling();
+
+      if (callAttemptId != null) {
+        _initializePeerConnection();
+      }
+    } catch (e) {
+      debugPrint('Initialization error: $e');
+      if (mounted) Navigator.pop(context);
+    }
+  }
+
+  Future<void> _initializePeerConnection() async {
+    if (callAttemptId == null || _pc != null) return;
+
+    try {
+      final response = await DioClient.instance.get(
+        '/appointments/ice-servers/',
+        queryParameters: {'call_attempt_id': callAttemptId},
+      );
+      final iceConfig = Map<String, dynamic>.from(response.data);
 
       _pc = await createPeerConnection(iceConfig, {
         'mandatory': {},
@@ -139,7 +159,6 @@ class _VideoCallScreenState extends ConsumerState<VideoCallScreen> with WidgetsB
       };
 
       _pc!.onIceCandidate = (candidate) {
-        if (candidate == null) return;
         _send({'type': 'ice', 'candidate': candidate.toMap()});
       };
 
@@ -147,13 +166,12 @@ class _VideoCallScreenState extends ConsumerState<VideoCallScreen> with WidgetsB
         if (state == RTCPeerConnectionState.RTCPeerConnectionStateConnected) {
           _startStatsPolling();
         }
-        // Don't automatically hang up on disconnect to allow reconnection
       };
 
-      _connectSignaling();
+      _send({'type': 'ready'});
+      if (mounted) setState(() => _connecting = false);
     } catch (e) {
-      debugPrint('Initialization error: $e');
-      if (mounted) Navigator.pop(context);
+      debugPrint('PeerConnection initialization error: $e');
     }
   }
 
@@ -166,6 +184,10 @@ class _VideoCallScreenState extends ConsumerState<VideoCallScreen> with WidgetsB
     _channel!.stream.listen((event) async {
       final data = jsonDecode(event);
       switch (data['type']) {
+        case 'connection_info':
+          callAttemptId = data['call_attempt_id'];
+          await _initializePeerConnection();
+          break;
         case 'ready':
           final userProfile = ref.read(currentUserProfileProvider).valueOrNull;
           if (userProfile?['role'] == 'patient') {
@@ -223,9 +245,6 @@ class _VideoCallScreenState extends ConsumerState<VideoCallScreen> with WidgetsB
         });
       }
     });
-
-    _send({'type': 'ready'});
-    setState(() => _connecting = false);
   }
 
   Future<void> _createOffer() async {

@@ -2,6 +2,7 @@ import json
 import asyncio
 import jwt
 import logging
+import uuid
 from django.db import models
 from django.conf import settings
 from jwt import PyJWKClient
@@ -158,6 +159,19 @@ class VideoSignalConsumer(BaseConsumer):
         await self.channel_layer.group_add(self.room_group_name, self.channel_name)
         await self.accept()
 
+        # Get or create call_attempt_id for this session
+        call_attempt_id_key = f"video_call_attempt_{self.appointment_id}"
+        new_id = str(uuid.uuid4())
+        # cache.add is atomic: returns True if set, False if exists
+        cache.add(call_attempt_id_key, new_id, timeout=3600)
+        self.call_attempt_id = cache.get(call_attempt_id_key) or new_id
+
+        # Send it to the user who just connected
+        await self.send(text_data=json.dumps({
+            'type': 'connection_info',
+            'call_attempt_id': self.call_attempt_id
+        }))
+
         cache_key = f"video_presence_{self.appointment_id}_{self.user['role']}"
         cache.set(cache_key, True, timeout=300)
 
@@ -167,6 +181,12 @@ class VideoSignalConsumer(BaseConsumer):
         if hasattr(self, 'room_group_name'):
             cache_key = f"video_presence_{self.appointment_id}_{self.user['role']}"
             cache.delete(cache_key)
+
+            # If both participants are gone, clear the call attempt ID from cache
+            patient_present = cache.get(f"video_presence_{self.appointment_id}_patient")
+            doctor_present = cache.get(f"video_presence_{self.appointment_id}_doctor")
+            if not patient_present and not doctor_present:
+                cache.delete(f"video_call_attempt_{self.appointment_id}")
 
             await self._notify_peer_presence(is_joining=False)
 
@@ -187,6 +207,13 @@ class VideoSignalConsumer(BaseConsumer):
                 # Explicitly clear presence when hangup is received
                 cache_key = f"video_presence_{self.appointment_id}_{self.user['role']}"
                 cache.delete(cache_key)
+
+                # If both participants are gone, clear the call attempt ID from cache
+                patient_present = cache.get(f"video_presence_{self.appointment_id}_patient")
+                doctor_present = cache.get(f"video_presence_{self.appointment_id}_doctor")
+                if not patient_present and not doctor_present:
+                    cache.delete(f"video_call_attempt_{self.appointment_id}")
+
                 await self._notify_peer_presence(is_joining=False)
 
                 await self.channel_layer.group_send(
@@ -228,7 +255,8 @@ class VideoSignalConsumer(BaseConsumer):
                     'type': 'video_presence',
                     'appointment_id': self.appointment_id,
                     'role': self.user['role'],
-                    'is_present': is_joining
+                    'is_present': is_joining,
+                    'call_attempt_id': getattr(self, 'call_attempt_id', None)
                 }
             }
         )
