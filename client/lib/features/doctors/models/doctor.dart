@@ -14,6 +14,32 @@ class Specialty {
   }
 }
 
+class WeeklyAvailability {
+  final String id;
+  final int dayOfWeek;
+  final String startTime;
+  final String endTime;
+  final int slotDurationMinutes;
+
+  WeeklyAvailability({
+    required this.id,
+    required this.dayOfWeek,
+    required this.startTime,
+    required this.endTime,
+    required this.slotDurationMinutes,
+  });
+
+  factory WeeklyAvailability.fromJson(Map<String, dynamic> json) {
+    return WeeklyAvailability(
+      id: json['id'],
+      dayOfWeek: json['day_of_week'],
+      startTime: json['start_time'],
+      endTime: json['end_time'],
+      slotDurationMinutes: json['slot_duration_minutes'],
+    );
+  }
+}
+
 class Doctor {
   final String id;
   final String fullName;
@@ -23,6 +49,7 @@ class Doctor {
   final double averageRating;
   final int totalReviews;
   final List<Specialty> specialties;
+  final List<WeeklyAvailability> availability;
 
   Doctor({
     required this.id,
@@ -33,6 +60,7 @@ class Doctor {
     required this.averageRating,
     required this.totalReviews,
     required this.specialties,
+    required this.availability,
   });
 
   String get displayName {
@@ -55,6 +83,9 @@ class Doctor {
       totalReviews: json['total_reviews'] ?? 0,
       specialties: (json['specialties'] as List? ?? [])
           .map((s) => Specialty.fromJson(s))
+          .toList(),
+      availability: (json['availability'] as List? ?? [])
+          .map((a) => WeeklyAvailability.fromJson(a))
           .toList(),
     );
   }

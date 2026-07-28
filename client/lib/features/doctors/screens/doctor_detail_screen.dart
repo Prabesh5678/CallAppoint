@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import 'package:khalti_checkout_flutter/khalti_checkout_flutter.dart';
 import '../../payments/providers/payment_provider.dart';
 import '../providers/doctor_detail_provider.dart';
+import '../models/doctor.dart';
 
 class DoctorDetailScreen extends ConsumerStatefulWidget {
   final String doctorId;
@@ -17,9 +18,11 @@ class _DoctorDetailScreenState extends ConsumerState<DoctorDetailScreen>
     with WidgetsBindingObserver {
   Slot? _selectedSlot;
   final _reasonController = TextEditingController();
+  final _dateScrollController = ScrollController();
   bool _booking = false;
   String? _pendingPidx;
   bool _checkingPending = false;
+  bool _nearestDateFound = false;
 
   @override
   void initState() {
@@ -27,10 +30,64 @@ class _DoctorDetailScreenState extends ConsumerState<DoctorDetailScreen>
     WidgetsBinding.instance.addObserver(this);
   }
 
+  void _findAndSelectNearestDate(List<WeeklyAvailability> availability) {
+    if (_nearestDateFound || availability.isEmpty) return;
+
+    final now = DateTime.now();
+
+    // Group availability by day for easier lookup
+    final dayMap = <int, List<WeeklyAvailability>>{};
+    for (var a in availability) {
+      dayMap.putIfAbsent(a.dayOfWeek, () => []).add(a);
+    }
+
+    for (int i = 0; i < 30; i++) {
+      final date = now.add(Duration(days: i));
+      final dayOfWeek = date.weekday % 7;
+
+      if (dayMap.containsKey(dayOfWeek)) {
+        // If it's today, check if the last slot's end time is in the future
+        if (i == 0) {
+          bool anyFutureSlot = false;
+          for (var a in dayMap[dayOfWeek]!) {
+            final parts = a.endTime.split(':');
+            final endDateTime = DateTime(
+              date.year, date.month, date.day,
+              int.parse(parts[0]), int.parse(parts[1])
+            );
+            if (endDateTime.isAfter(now)) {
+              anyFutureSlot = true;
+              break;
+            }
+          }
+          if (!anyFutureSlot) continue; // Skip today if all shifts are over
+        }
+
+        // Found a likely available date
+        final selectedIndex = i;
+        Future.microtask(() {
+          if (mounted) {
+            ref.read(selectedDateProvider.notifier).state = date;
+            if (selectedIndex > 0) {
+              _dateScrollController.animateTo(
+                selectedIndex * 76.0,
+                duration: const Duration(milliseconds: 600),
+                curve: Curves.easeOutQuart,
+              );
+            }
+          }
+        });
+        _nearestDateFound = true;
+        break;
+      }
+    }
+  }
+
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _reasonController.dispose();
+    _dateScrollController.dispose();
     super.dispose();
   }
 
@@ -210,164 +267,195 @@ class _DoctorDetailScreenState extends ConsumerState<DoctorDetailScreen>
       body: doctorAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (e, _) => Center(child: Text('Error: $e')),
-        data: (doctor) => SingleChildScrollView(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Card(
-                elevation: 0,
-                color: Theme.of(context).colorScheme.surfaceContainerHighest.withOpacity(0.3),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Row(
-                    children: [
-                      CircleAvatar(
-                        radius: 40,
-                        backgroundImage: doctor.avatarUrl != null
-                            ? NetworkImage(doctor.avatarUrl!)
-                            : null,
-                        child: doctor.avatarUrl == null
-                            ? const Icon(Icons.person, size: 40)
-                            : null,
-                      ),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              doctor.displayName,
-                              style: const TextStyle(
-                                fontSize: 22,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              doctor.specialties.isNotEmpty
-                                  ? doctor.specialties.map((s) => s.name).join(', ')
-                                  : 'General Physician',
-                              style: TextStyle(
-                                color: Theme.of(context).colorScheme.primary,
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                            const SizedBox(height: 8),
-                            Row(
-                              children: [
-                                const Icon(
-                                  Icons.star,
-                                  size: 18,
-                                  color: Colors.amber,
-                                ),
-                                const SizedBox(width: 4),
-                                Text(
-                                  doctor.averageRating.toStringAsFixed(1),
-                                  style: const TextStyle(fontWeight: FontWeight.bold),
-                                ),
-                                Text(
-                                  ' (${doctor.totalReviews} reviews)',
-                                  style: TextStyle(color: Theme.of(context).hintColor),
-                                ),
-                              ],
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-              const SizedBox(height: 24),
-              Row(
-                children: [
-                  Expanded(
-                    child: _InfoTile(
-                      label: 'Experience',
-                      value: '${doctor.yearsExperience} yrs',
-                      icon: Icons.work_outline,
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: _InfoTile(
-                      label: 'Fee',
-                      value: 'Rs. ${doctor.consultationFee.toStringAsFixed(0)}',
-                      icon: Icons.payments_outlined,
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 24),
-              const Text(
-                'Select Date',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 12),
-              SizedBox(
-                height: 80,
-                child: ListView.builder(
-                  scrollDirection: Axis.horizontal,
-                  itemCount: 14,
-                  itemBuilder: (context, index) {
-                    final date = DateTime.now().add(Duration(days: index));
-                    final isSelected =
-                        date.year == selectedDate.year &&
-                        date.month == selectedDate.month &&
-                        date.day == selectedDate.day;
-                    return GestureDetector(
-                      onTap: () {
-                        ref.read(selectedDateProvider.notifier).state = date;
-                        setState(() => _selectedSlot = null);
-                      },
-                      child: AnimatedContainer(
-                        duration: const Duration(milliseconds: 200),
-                        width: 64,
-                        margin: const EdgeInsets.only(right: 12),
-                        decoration: BoxDecoration(
-                          color: isSelected
-                              ? Theme.of(context).colorScheme.primary
-                              : Theme.of(context).colorScheme.surface,
-                          border: Border.all(
-                            color: isSelected
-                                ? Theme.of(context).colorScheme.primary
-                                : Theme.of(context).dividerColor,
-                          ),
-                          borderRadius: BorderRadius.circular(12),
-                          boxShadow: isSelected
-                              ? [BoxShadow(color: Theme.of(context).colorScheme.primary.withOpacity(0.3), blurRadius: 8, offset: const Offset(0, 4))]
+        data: (doctor) {
+          // Auto-select nearest available date on first load
+          _findAndSelectNearestDate(doctor.availability);
+
+          final availableDays = doctor.availability.map((a) => a.dayOfWeek).toSet();
+
+          return SingleChildScrollView(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Card(
+                  elevation: 0,
+                  color: Theme.of(context).colorScheme.surfaceContainerHighest.withOpacity(0.3),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Row(
+                      children: [
+                        CircleAvatar(
+                          radius: 40,
+                          backgroundImage: doctor.avatarUrl != null
+                              ? NetworkImage(doctor.avatarUrl!)
+                              : null,
+                          child: doctor.avatarUrl == null
+                              ? const Icon(Icons.person, size: 40)
                               : null,
                         ),
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Text(
-                              DateFormat('E').format(date),
-                              style: TextStyle(
-                                fontSize: 13,
-                                color: isSelected ? Colors.white : Theme.of(context).hintColor,
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                doctor.displayName,
+                                style: const TextStyle(
+                                  fontSize: 22,
+                                  fontWeight: FontWeight.bold,
+                                ),
                               ),
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              DateFormat('d').format(date),
-                              style: TextStyle(
-                                fontSize: 18,
-                                fontWeight: FontWeight.bold,
-                                color: isSelected ? Colors.white : null,
+                              const SizedBox(height: 4),
+                              Text(
+                                doctor.specialties.isNotEmpty
+                                    ? doctor.specialties.map((s) => s.name).join(', ')
+                                    : 'General Physician',
+                                style: TextStyle(
+                                  color: Theme.of(context).colorScheme.primary,
+                                  fontWeight: FontWeight.w500,
+                                ),
                               ),
-                            ),
-                          ],
+                              const SizedBox(height: 8),
+                              Row(
+                                children: [
+                                  const Icon(
+                                    Icons.star,
+                                    size: 18,
+                                    color: Colors.amber,
+                                  ),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    doctor.averageRating.toStringAsFixed(1),
+                                    style: const TextStyle(fontWeight: FontWeight.bold),
+                                  ),
+                                  Text(
+                                    ' (${doctor.totalReviews} reviews)',
+                                    style: TextStyle(color: Theme.of(context).hintColor),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
                         ),
-                      ),
-                    );
-                  },
+                      ],
+                    ),
+                  ),
                 ),
-              ),
-              const SizedBox(height: 24),
-              const Text(
+                const SizedBox(height: 24),
+                Row(
+                  children: [
+                    Expanded(
+                      child: _InfoTile(
+                        label: 'Experience',
+                        value: '${doctor.yearsExperience} yrs',
+                        icon: Icons.work_outline,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: _InfoTile(
+                        label: 'Fee',
+                        value: 'Rs. ${doctor.consultationFee.toStringAsFixed(0)}',
+                        icon: Icons.payments_outlined,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 24),
+                const Text(
+                  'Select Date',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 12),
+                SizedBox(
+                  height: 90,
+                  child: ListView.builder(
+                    controller: _dateScrollController,
+                    scrollDirection: Axis.horizontal,
+                    itemCount: 21,
+                    itemBuilder: (context, index) {
+                      final date = DateTime.now().add(Duration(days: index));
+                      final isSelected =
+                          date.year == selectedDate.year &&
+                          date.month == selectedDate.month &&
+                          date.day == selectedDate.day;
+
+                      final isAvailableDay = availableDays.contains(date.weekday % 7);
+
+                      return GestureDetector(
+                        onTap: isAvailableDay ? () {
+                          ref.read(selectedDateProvider.notifier).state = date;
+                          setState(() => _selectedSlot = null);
+                        } : null,
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 200),
+                          width: 64,
+                          margin: const EdgeInsets.only(right: 12),
+                          decoration: BoxDecoration(
+                            color: isSelected
+                                ? Theme.of(context).colorScheme.primary
+                                : isAvailableDay
+                                    ? Theme.of(context).colorScheme.surface
+                                    : Colors.red.withOpacity(0.05),
+                            border: Border.all(
+                              color: isSelected
+                                  ? Theme.of(context).colorScheme.primary
+                                  : isAvailableDay
+                                      ? Theme.of(context).dividerColor
+                                      : Colors.red.withOpacity(0.2),
+                            ),
+                            borderRadius: BorderRadius.circular(12),
+                            boxShadow: isSelected
+                                ? [BoxShadow(color: Theme.of(context).colorScheme.primary.withOpacity(0.3), blurRadius: 8, offset: const Offset(0, 4))]
+                                : null,
+                          ),
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Text(
+                                DateFormat('E').format(date),
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  color: isSelected
+                                      ? Colors.white
+                                      : isAvailableDay
+                                          ? Theme.of(context).hintColor
+                                          : Colors.red.withOpacity(0.5),
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                DateFormat('d').format(date),
+                                style: TextStyle(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.bold,
+                                  color: isSelected
+                                      ? Colors.white
+                                      : isAvailableDay
+                                          ? null
+                                          : Colors.red.withOpacity(0.5),
+                                ),
+                              ),
+                              if (!isAvailableDay)
+                                const Text(
+                                  'OFF',
+                                  style: TextStyle(
+                                    fontSize: 9,
+                                    color: Colors.red,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                            ],
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+                const SizedBox(height: 24),
+                const Text(
                 'Available Slots',
                 style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
               ),
@@ -397,8 +485,8 @@ class _DoctorDetailScreenState extends ConsumerState<DoctorDetailScreen>
                     runSpacing: 10,
                     children: slots.map((slot) {
                       final isSelected = _selectedSlot?.start == slot.start;
-                      final startTimeStr = DateFormat('h:mm').format(slot.start);
-                      final endTimeStr = DateFormat('h:mm a').format(slot.end);
+                      final startTimeStr = DateFormat('h:mm').format(slot.start.toLocal());
+                      final endTimeStr = DateFormat('h:mm a').format(slot.end.toLocal());
 
                       return ChoiceChip(
                         label: Text(
@@ -486,10 +574,11 @@ class _DoctorDetailScreenState extends ConsumerState<DoctorDetailScreen>
               const SizedBox(height: 40),
             ],
           ),
-        ),
-      ),
-    );
-  }
+        );
+      },
+    ),
+  );
+}
 }
 
 class _InfoTile extends StatelessWidget {

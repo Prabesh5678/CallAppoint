@@ -59,6 +59,8 @@ class _VideoCallScreenState extends ConsumerState<VideoCallScreen> with WidgetsB
 
   bool _remoteDescriptionSet = false;
   final List<Map<String, dynamic>> _pendingCandidates = [];
+  bool _peerReadyReceived = false;
+  bool _isInitializingPC = false;
 
   @override
   void initState() {
@@ -130,12 +132,17 @@ class _VideoCallScreenState extends ConsumerState<VideoCallScreen> with WidgetsB
   }
 
   Future<void> _initializePeerConnection() async {
-    if (callAttemptId == null || _pc != null) return;
+    if (callAttemptId == null || _pc != null || _isInitializingPC) return;
+    _isInitializingPC = true;
 
     try {
+      debugPrint('Initializing PeerConnection with callAttemptId: $callAttemptId');
       final response = await DioClient.instance.get(
         '/appointments/ice-servers/',
-        queryParameters: {'call_attempt_id': callAttemptId},
+        queryParameters: {
+          'appointment_id': widget.appointmentId,
+          'call_attempt_id': callAttemptId,
+        },
       );
       final iceConfig = Map<String, dynamic>.from(response.data);
 
@@ -144,16 +151,20 @@ class _VideoCallScreenState extends ConsumerState<VideoCallScreen> with WidgetsB
         'optional': [{'DtlsSrtpKeyAgreement': true}],
       });
 
-      for (var track in _localStream!.getTracks()) {
-        await _pc!.addTrack(track, _localStream!);
+      if (_localStream != null) {
+        for (var track in _localStream!.getTracks()) {
+          await _pc!.addTrack(track, _localStream!);
+        }
       }
 
       _pc!.onTrack = (event) {
         if (event.streams.isNotEmpty) {
-          setState(() {
-            _remoteRenderer.srcObject = event.streams[0];
-            _remoteJoined = true;
-          });
+          if (mounted) {
+            setState(() {
+              _remoteRenderer.srcObject = event.streams[0];
+              _remoteJoined = true;
+            });
+          }
           _startStatsPolling();
         }
       };
@@ -169,9 +180,19 @@ class _VideoCallScreenState extends ConsumerState<VideoCallScreen> with WidgetsB
       };
 
       _send({'type': 'ready'});
+
+      final userProfile = ref.read(currentUserProfileProvider).valueOrNull;
+      if (userProfile?['role'] == 'patient' && _peerReadyReceived && !_offerInitiated) {
+        _offerInitiated = true;
+        await _createOffer();
+      }
+
       if (mounted) setState(() => _connecting = false);
     } catch (e) {
       debugPrint('PeerConnection initialization error: $e');
+      if (mounted) setState(() => _connecting = false);
+    } finally {
+      _isInitializingPC = false;
     }
   }
 
@@ -181,17 +202,30 @@ class _VideoCallScreenState extends ConsumerState<VideoCallScreen> with WidgetsB
       Uri.parse('${Config.wsBaseUrl}/ws/video/${widget.appointmentId}/?token=$token'),
     );
 
+    // Fallback: If server doesn't provide a callAttemptId within 5 seconds, generate one locally.
+    // Note: Local fallback will cause COTURN logs to be separate for caller/callee.
+    Future.delayed(const Duration(seconds: 5), () {
+      if (mounted && callAttemptId == null && !_isInitializingPC) {
+        debugPrint('Signaling timeout: Generating local callAttemptId as fallback (Logs will be split)');
+        callAttemptId = const Uuid().v4();
+        _initializePeerConnection();
+      }
+    });
+
     _channel!.stream.listen((event) async {
       final data = jsonDecode(event);
       switch (data['type']) {
         case 'connection_info':
-          callAttemptId = data['call_attempt_id'];
-          await _initializePeerConnection();
+          if (callAttemptId == null) {
+            callAttemptId = (data['callAttemptId'] ?? data['call_attempt_id'])?.toString();
+            await _initializePeerConnection();
+          }
           break;
         case 'ready':
+          _peerReadyReceived = true;
           final userProfile = ref.read(currentUserProfileProvider).valueOrNull;
           if (userProfile?['role'] == 'patient') {
-            if (!_offerInitiated) {
+            if (!_offerInitiated && _pc != null) {
               _offerInitiated = true;
               await _createOffer();
             }
@@ -232,16 +266,16 @@ class _VideoCallScreenState extends ConsumerState<VideoCallScreen> with WidgetsB
       }
     }, onError: (e) {
       debugPrint('Signaling error: $e');
-      if (!_connecting) {
+      if (mounted) {
         Future.delayed(const Duration(seconds: 2), () {
-          if (!_connecting && mounted) _connectSignaling();
+          if (mounted) _connectSignaling();
         });
       }
     }, onDone: () {
       debugPrint('Signaling closed');
-      if (!_connecting) {
+      if (mounted) {
         Future.delayed(const Duration(seconds: 2), () {
-          if (!_connecting && mounted) _connectSignaling();
+          if (mounted) _connectSignaling();
         });
       }
     });

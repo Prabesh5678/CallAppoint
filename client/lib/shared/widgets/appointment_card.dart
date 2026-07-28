@@ -103,7 +103,7 @@ class AppointmentCard extends ConsumerWidget {
               ),
               const SizedBox(height: 6),
               Text(
-                dateFmt.format(appointment.scheduledStart),
+                dateFmt.format(appointment.scheduledStart.toLocal()),
                 style: TextStyle(color: Theme.of(context).hintColor),
               ),
 

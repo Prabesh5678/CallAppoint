@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:intl/intl.dart';
 import '../../shared/widgets/theme_toggle_button.dart';
 import '../../shared/widgets/doctor_card.dart';
 import '../../shared/widgets/appointment_card.dart';
@@ -98,6 +99,8 @@ class _FindDoctorsTabState extends ConsumerState<_FindDoctorsTab> {
     final specialtiesAsync = ref.watch(specialtiesProvider);
     final doctorsAsync = ref.watch(doctorsProvider);
     final selectedSpecialty = ref.watch(selectedSpecialtyProvider);
+    final filterDate = ref.watch(filterDateProvider);
+    final filterTime = ref.watch(filterTimeProvider);
 
     return Scaffold(
       appBar: AppBar(
@@ -124,7 +127,7 @@ class _FindDoctorsTabState extends ConsumerState<_FindDoctorsTab> {
         child: ListView(
           children: [
             Padding(
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
               child: TextField(
                 controller: _searchController,
                 decoration: InputDecoration(
@@ -138,6 +141,71 @@ class _FindDoctorsTabState extends ConsumerState<_FindDoctorsTab> {
                 ),
                 onSubmitted: (value) =>
                     ref.read(searchQueryProvider.notifier).state = value,
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: () async {
+                        final picked = await showDatePicker(
+                          context: context,
+                          initialDate: filterDate ?? DateTime.now(),
+                          firstDate: DateTime.now(),
+                          lastDate: DateTime.now().add(const Duration(days: 90)),
+                        );
+                        ref.read(filterDateProvider.notifier).state = picked;
+                      },
+                      icon: const Icon(Icons.calendar_today, size: 18),
+                      label: Text(filterDate == null
+                          ? 'Select Date'
+                          : DateFormat('MMM d').format(filterDate)),
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                        backgroundColor: filterDate != null ? Theme.of(context).colorScheme.primaryContainer.withOpacity(0.3) : null,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: () async {
+                        final picked = await showTimePicker(
+                          context: context,
+                          initialTime: filterTime != null
+                              ? TimeOfDay.fromDateTime(filterTime)
+                              : const TimeOfDay(hour: 9, minute: 0),
+                        );
+                        if (picked != null) {
+                          final now = DateTime.now();
+                          ref.read(filterTimeProvider.notifier).state = DateTime(
+                            now.year, now.month, now.day, picked.hour, picked.minute);
+                        }
+                      },
+                      icon: const Icon(Icons.access_time, size: 18),
+                      label: Text(filterTime == null
+                          ? 'Select Time'
+                          : DateFormat('h:mm a').format(filterTime)),
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                        backgroundColor: filterTime != null ? Theme.of(context).colorScheme.primaryContainer.withOpacity(0.3) : null,
+                      ),
+                    ),
+                  ),
+                  if (filterDate != null || filterTime != null)
+                    IconButton(
+                      icon: const Icon(Icons.clear),
+                      onPressed: () {
+                        ref.read(filterDateProvider.notifier).state = null;
+                        ref.read(filterTimeProvider.notifier).state = null;
+                      },
+                      tooltip: 'Clear filters',
+                    ),
+                ],
               ),
             ),
             SizedBox(
