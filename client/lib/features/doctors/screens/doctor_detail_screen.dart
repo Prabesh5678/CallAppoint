@@ -397,14 +397,24 @@ class _DoctorDetailScreenState extends ConsumerState<DoctorDetailScreen>
                     runSpacing: 10,
                     children: slots.map((slot) {
                       final isSelected = _selectedSlot?.start == slot.start;
+                      final startTimeStr = DateFormat('h:mm').format(slot.start);
+                      final endTimeStr = DateFormat('h:mm a').format(slot.end);
+
                       return ChoiceChip(
-                        label: Text(DateFormat('h:mm a').format(slot.start)),
+                        label: Text(
+                          slot.isAvailable ? '$startTimeStr - $endTimeStr' : '$startTimeStr - $endTimeStr (Booked)',
+                          style: TextStyle(
+                            color: slot.isAvailable ? null : Colors.grey.shade600,
+                            decoration: slot.isAvailable ? null : TextDecoration.lineThrough,
+                          ),
+                        ),
                         selected: isSelected,
                         onSelected: slot.isAvailable
                             ? (_) => setState(() => _selectedSlot = slot)
                             : null,
                         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        backgroundColor: slot.isAvailable ? null : Colors.grey.shade200,
                       );
                     }).toList(),
                   );

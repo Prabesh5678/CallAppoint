@@ -346,10 +346,30 @@ class _VideoCallScreenState extends ConsumerState<VideoCallScreen> with WidgetsB
       final stats = await _pc!.getStats();
       for (var report in stats) {
         if (report.type == 'candidate-pair' && (report.values['nominated'] == true || report.values['state'] == 'succeeded')) {
+          String connectionType = "Checking...";
+          final localCandidateId = report.values['localCandidateId'];
+
+          if (localCandidateId != null) {
+            for (var r in stats) {
+              if (r.id == localCandidateId) {
+                final cType = r.values['candidateType'];
+                if (cType == 'relay') {
+                  connectionType = "Relay (TURN)";
+                } else if (cType == 'host' || cType == 'srflx') {
+                  connectionType = "P2P (${cType.toUpperCase()})";
+                } else {
+                  connectionType = cType?.toString().toUpperCase() ?? "P2P";
+                }
+                break;
+              }
+            }
+          }
+
           if (mounted) {
             setState(() {
               final rtt = report.values['currentRoundTripTime'] ?? report.values['roundTripTime'] ?? 0;
               _latencyMs = rtt * 1000;
+              _connectionMethod = connectionType;
             });
           }
         }
@@ -429,6 +449,7 @@ class _VideoCallScreenState extends ConsumerState<VideoCallScreen> with WidgetsB
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
+                                    Text('Method: $_connectionMethod', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
                                     Text('Latency: ${_latencyMs.toStringAsFixed(0)} ms', style: const TextStyle(color: Colors.white70, fontSize: 12)),
                                     Text('Bandwidth: ${_bitrateMbps.toStringAsFixed(2)} Mbps', style: const TextStyle(color: Colors.white70, fontSize: 12)),
                                   ],

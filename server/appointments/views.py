@@ -68,10 +68,14 @@ class BookAppointmentView(generics.CreateAPIView):
             patient_id = self.request.user.id
 
         DoctorProfile.objects.select_for_update().get(id=doctor_id)
-        slots = get_available_slots(doctor_id, data['scheduled_start'].date())
 
         requested_start = _ensure_aware(data['scheduled_start'])
         requested_end = _ensure_aware(data['scheduled_end'])
+
+        if requested_start < dj_timezone.now():
+            raise ValidationError("Cannot book an appointment in the past")
+
+        slots = get_available_slots(doctor_id, requested_start.date())
 
         slot_matches = any(
             s['start'] == requested_start and s['end'] == requested_end and s['is_available']

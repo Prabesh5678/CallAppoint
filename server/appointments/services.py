@@ -4,7 +4,10 @@ from doctors.models import DoctorAvailability, DoctorAvailabilityException
 from .models import Appointment
 
 def get_available_slots(doctor_id, date):
+    now = timezone.now()
     day_of_week = date.weekday()
+    # Python weekday(): Mon=0 ... Sun=6
+    # Model DAY_CHOICES: Sun=0, Mon=1 ... Sat=6
     day_of_week = (day_of_week + 1) % 7
 
     blocking_exception = DoctorAvailabilityException.objects.filter(
@@ -33,17 +36,24 @@ def get_available_slots(doctor_id, date):
     candidate_slots = []
     for w in windows:
         slot_len = timedelta(minutes=w['slot_duration_minutes'])
-        # make_aware() attaches the current Django TIME_ZONE — matches how
-        # DRF parses incoming ISO datetimes, so equality checks work correctly
         cursor = timezone.make_aware(datetime.combine(date, w['start_time']))
         window_end = timezone.make_aware(datetime.combine(date, w['end_time']))
+
         while cursor + slot_len <= window_end:
             slot_start, slot_end = cursor, cursor + slot_len
+
+            # 1. Skip if slot is in the past
+            if slot_start < now:
+                cursor += slot_len
+                continue
+
+            # 2. Check partial blocks (exceptions)
             blocked = any(
                 timezone.make_aware(datetime.combine(date, pb['start_time'])) < slot_end and
                 timezone.make_aware(datetime.combine(date, pb['end_time'])) > slot_start
                 for pb in partial_blocks
             )
+
             if not blocked:
                 candidate_slots.append((slot_start, slot_end))
             cursor += slot_len
@@ -56,8 +66,15 @@ def get_available_slots(doctor_id, date):
     booked_ranges = [(a.scheduled_start, a.scheduled_end) for a in existing]
 
     all_slots = []
+    seen_starts = set()
     for s, e in candidate_slots:
+        # Deduplicate
+        if s in seen_starts:
+            continue
+        seen_starts.add(s)
+
         is_booked = any(s < be and e > bs for bs, be in booked_ranges)
         all_slots.append({'start': s, 'end': e, 'is_available': not is_booked})
 
+    all_slots.sort(key=lambda x: x['start'])
     return all_slots

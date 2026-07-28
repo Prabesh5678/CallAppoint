@@ -95,4 +95,29 @@ class DoctorAvailabilityCreateSerializer(serializers.ModelSerializer):
     class Meta:
         model = DoctorAvailability
         fields = ['id', 'day_of_week', 'start_time', 'end_time', 'slot_duration_minutes', 'is_active']
-        read_only_fields = ['id']             
+        read_only_fields = ['id']
+
+    def validate(self, data):
+        doctor_id = self.context['request'].user.id
+        day = data['day_of_week']
+        start = data['start_time']
+        end = data['end_time']
+
+        if start >= end:
+            raise serializers.ValidationError("End time must be after start time")
+
+        # Check for overlaps with existing weekly slots for this doctor on this day
+        # Import models here if not available globally in the file
+        from django.db.models import Q
+        overlapping = DoctorAvailability.objects.filter(
+            doctor_id=doctor_id,
+            day_of_week=day,
+            is_active=True
+        ).filter(
+            Q(start_time__lt=end, end_time__gt=start)
+        )
+
+        if overlapping.exists():
+            raise serializers.ValidationError("This slot overlaps with an existing availability slot.")
+
+        return data

@@ -57,6 +57,15 @@ class _ScheduleFollowupDialogState extends ConsumerState<ScheduleFollowupDialog>
       _selectedTime!.minute,
     );
 
+    if (start.isBefore(DateTime.now())) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Cannot schedule an appointment in the past')),
+        );
+      }
+      return;
+    }
+
     // Default duration 30 mins
     final end = start.add(const Duration(minutes: 30));
 
