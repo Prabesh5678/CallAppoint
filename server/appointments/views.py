@@ -17,7 +17,6 @@ from django.conf import settings
 
 logger = logging.getLogger(__name__)
 
-
 def _ensure_aware(dt):
     if dj_timezone.is_naive(dt):
         return dj_timezone.make_aware(dt)
@@ -36,9 +35,7 @@ def available_slots(request, doctor_id):
         for s in slots
     ])
 
-
 class MyAppointmentsView(generics.ListAPIView):
-    """GET /api/appointments/mine/ — role-aware: patient sees their bookings, doctor sees theirs."""
     serializer_class = AppointmentSerializer
     permission_classes = [IsAuthenticated]
 
@@ -59,9 +56,6 @@ class BookAppointmentView(generics.CreateAPIView):
         data = serializer.validated_data
         doctor_id = data['doctor'].pk
 
-        # Determine the patient and status:
-        # If it's a follow-up booked by a doctor, get the patient from the parent appointment
-        # and auto-confirm since it's initiated by the doctor.
         parent_appointment = data.get('parent_appointment')
         status_val = 'pending'
         if parent_appointment and self.request.user.role == 'doctor':
@@ -70,9 +64,7 @@ class BookAppointmentView(generics.CreateAPIView):
         else:
             patient_id = self.request.user.id
 
-        # Lock the doctor profile to serialize bookings
         DoctorProfile.objects.select_for_update().get(id=doctor_id)
-
         slots = get_available_slots(doctor_id, data['scheduled_start'].date())
 
         requested_start = _ensure_aware(data['scheduled_start'])
@@ -87,16 +79,15 @@ class BookAppointmentView(generics.CreateAPIView):
 
         serializer.save(patient_id=patient_id, status=status_val)
 
-        # If auto-confirmed, generate video room
         if status_val == 'confirmed':
             serializer.instance.video_room_id = f"callappoint-{serializer.instance.id}"
             serializer.instance.save()
-    
+
         notify_user(
-            user_id=data['doctor'].id_id,
+            user_id=doctor_id if self.request.user.role == 'patient' else patient_id,
             type='appointment_booked',
-            title='New appointment request',
-            body=f'A patient requested a booking on {data["scheduled_start"].strftime("%b %d, %I:%M %p")}',
+            title='New appointment' if status_val == 'pending' else 'Follow-up scheduled',
+            body='A new appointment session has been created.',
             data={'appointment_id': str(serializer.instance.id)},
         )
 
@@ -104,15 +95,12 @@ class BookAppointmentView(generics.CreateAPIView):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         self.perform_create(serializer)
-        # return the full appointment (including id) using the READ serializer, not the create one
         output = AppointmentSerializer(serializer.instance)
         return Response(output.data, status=status.HTTP_201_CREATED)
-
 
 @api_view(['POST'])
 @permission_classes([IsAuthenticated, IsDoctor])
 def respond_to_appointment(request, pk):
-    """POST /api/appointments/<uuid>/respond/  body: {"action": "confirm" | "reject"}"""
     action = request.data.get('action')
     if action not in ('confirm', 'reject'):
         raise ValidationError('action must be "confirm" or "reject"')
@@ -138,11 +126,9 @@ def respond_to_appointment(request, pk):
     )
     return Response(AppointmentSerializer(appt).data)
 
-
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def cancel_appointment(request, pk):
-    """POST /api/appointments/<uuid>/cancel/ — either party can cancel."""
     user = request.user
     try:
         appt = Appointment.objects.get(pk=pk)
@@ -160,7 +146,6 @@ def cancel_appointment(request, pk):
     appt.cancellation_reason = request.data.get('reason', '')
     appt.save()
 
-    # Notify the other party
     peer_id = appt.doctor_id if str(user.id) == str(appt.patient_id) else appt.patient_id
     notify_user(
         user_id=peer_id,
@@ -174,9 +159,8 @@ def cancel_appointment(request, pk):
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def get_video_room(request, pk):
-    """GET /api/appointments/<uuid>/video-room/"""
     try:
-        appt = Appointment.objects.get(pk=pk)
+        appt = Appointment.objects.get(id=pk)
     except Appointment.DoesNotExist:
         raise ValidationError("Appointment not found")
 
@@ -187,25 +171,23 @@ def get_video_room(request, pk):
     if appt.status != 'confirmed':
         raise ValidationError(f"Video call not available — appointment status is '{appt.status}'")
 
-    if not appt.video_room_id:
-        raise ValidationError("No video room generated for this appointment")
-
     return Response({
         'room_name': appt.video_room_id,
         'jitsi_domain': 'meet.jit.si',
-        'display_name': user.db_user.full_name,
+        'display_name': user.full_name,
     })
 
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def get_appointment_followups(request, pk):
+    followups = Appointment.objects.filter(parent_appointment_id=pk).order_by('scheduled_start')
+    serializer = AppointmentSerializer(followups, many=True)
+    return Response(serializer.data)
 
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def get_ice_servers(request):
-    """
-    Generates dynamic, time-limited CoTurn credentials using HMAC-SHA1.
-    Valid for 24 hours.
-    """
     if not settings.COTURN_SECRET:
-        # Fallback to public STUN if secret is missing (for safety)
         return Response({
             'iceServers': [
                 {'urls': ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302']},
@@ -213,19 +195,14 @@ def get_ice_servers(request):
             ]
         })
 
-    # CoTurn uses UTC unix timestamp for time-limited credentials
-    expiry_time = int(time.time()) + 86400  # 24 hours
-
+    expiry_time = int(time.time()) + 86400
     call_attempt_id = request.GET.get('call_attempt_id')
+    username = f"{expiry_time}:{request.user.id}"
     if call_attempt_id:
-        username = f"{expiry_time}:{request.user.id}:{call_attempt_id}"
-    else:
-        username = f"{expiry_time}:{request.user.id}"  # Standard format: timestamp:username
+        username = f"{username}:{call_attempt_id}"
 
-    # Generate HMAC-SHA1 signature as the password
     secret = settings.COTURN_SECRET.encode('utf-8')
     message = username.encode('utf-8')
-
     hashed = hmac.new(secret, message, hashlib.sha1)
     password = base64.b64encode(hashed.digest()).decode('utf-8')
 
@@ -245,30 +222,3 @@ def get_ice_servers(request):
             },
         ]
     })
-
-@api_view(['GET'])
-@permission_classes([IsAuthenticated])
-def get_appointment_followups(request, pk):
-    """GET /api/appointments/<uuid>/followups/"""
-    followups = Appointment.objects.filter(parent_appointment_id=pk).order_by('scheduled_start')
-    serializer = AppointmentSerializer(followups, many=True)
-    return Response(serializer.data)
-    # LOCAL_COTURN_IP = "192.168.1.75"
-    # LOCAL_COTURN_SECRET = "9fbd4867d6ac8a6bcfef49b00d53e71d6822c16696821c7f689146b5a7d331fa"  # from /etc/turnserver.conf
-
-    # ttl_seconds = 86400  # 24 hours
-    # username = str(int(time.time()) + ttl_seconds)
-    # credential = base64.b64encode(
-    #     hmac.new(LOCAL_COTURN_SECRET.encode(), username.encode(), hashlib.sha1).digest()
-    # ).decode()
-
-    # return Response({
-    #     'iceServers': [
-    #         {'urls': [f'stun:{LOCAL_COTURN_IP}:3478']},
-    #         {
-    #             'urls': [f'turn:{LOCAL_COTURN_IP}:3478?transport=udp'],
-    #             'username': username,
-    #             'credential': credential,
-    #         },
-    #     ]
-    # })

@@ -9,6 +9,7 @@ import 'package:uuid/uuid.dart';
 import 'package:simple_pip_mode/simple_pip.dart';
 import 'package:simple_pip_mode/pip_widget.dart';
 import 'package:simple_pip_mode/aspect_ratio.dart' as pip;
+import 'package:permission_handler/permission_handler.dart';
 import '../../auth/providers/auth_provider.dart';
 import '../../../core/supabase_client.dart';
 import '../../../core/dio_client.dart';
@@ -36,9 +37,8 @@ class _VideoCallScreenState extends ConsumerState<VideoCallScreen> with WidgetsB
 
   bool _connecting = true;
   bool _remoteJoined = false;
-  bool _offerInitiated = false; // Flag to prevent double offers
+  bool _offerInitiated = false;
 
-  // Controls & Remote state
   bool _micEnabled = true;
   bool _camEnabled = true;
   bool _remoteMicEnabled = true;
@@ -47,7 +47,6 @@ class _VideoCallScreenState extends ConsumerState<VideoCallScreen> with WidgetsB
   bool _showArtifacts = false;
   bool _isInPipMode = false;
 
-  // Diagnostic Stats
   Timer? _statsPollTimer;
   double _bitrateMbps = 0;
   int _lastBytesReceived = 0;
@@ -55,16 +54,6 @@ class _VideoCallScreenState extends ConsumerState<VideoCallScreen> with WidgetsB
   String _connectionMethod = "Checking...";
   bool _showStatsOverlay = false;
 
-  // --- FIX: ICE candidate race-condition guard ---
-  // Candidates can arrive over the signaling WebSocket BEFORE
-  // setRemoteDescription() has finished (it's async, and the WS
-  // 'ice' messages can be delivered concurrently). Calling
-  // addCandidate() before the remote description is set can
-  // silently fail, dropping that candidate — which was causing
-  // otherwise-viable direct (srflx) candidates to be lost, forcing
-  // an unnecessary fallback to TURN relay. We buffer any candidates
-  // that arrive too early and flush them right after
-  // setRemoteDescription completes.
   bool _remoteDescriptionSet = false;
   final List<Map<String, dynamic>> _pendingCandidates = [];
 
@@ -77,36 +66,44 @@ class _VideoCallScreenState extends ConsumerState<VideoCallScreen> with WidgetsB
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.paused) {
+    // Try to enter PiP when app is inactive or paused
+    if ((state == AppLifecycleState.paused || state == AppLifecycleState.inactive) && !_isInPipMode) {
       _enterPipMode();
     }
   }
 
   Future<void> _init() async {
     try {
+      final statuses = await [Permission.camera, Permission.microphone].request();
+      if (statuses[Permission.camera] != PermissionStatus.granted ||
+          statuses[Permission.microphone] != PermissionStatus.granted) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Camera and Microphone permissions are required.')),
+          );
+          Navigator.pop(context);
+        }
+        return;
+      }
+
       await _localRenderer.initialize();
       await _remoteRenderer.initialize();
 
-      // 1. Fetch secure ICE servers from backend
       final response = await DioClient.instance.get(
         '/appointments/ice-servers/',
         queryParameters: {'call_attempt_id': callAttemptId},
       );
       final iceConfig = Map<String, dynamic>.from(response.data);
 
-      // 2. Get User Media
       _localStream = await navigator.mediaDevices.getUserMedia({
         'audio': true,
         'video': {'facingMode': 'user'},
       });
       _localRenderer.srcObject = _localStream;
 
-      // 3. Create Peer Connection with dynamic config
       _pc = await createPeerConnection(iceConfig, {
         'mandatory': {},
-        'optional': [
-          {'DtlsSrtpKeyAgreement': true},
-        ],
+        'optional': [{'DtlsSrtpKeyAgreement': true}],
       });
 
       for (var track in _localStream!.getTracks()) {
@@ -119,7 +116,7 @@ class _VideoCallScreenState extends ConsumerState<VideoCallScreen> with WidgetsB
             _remoteRenderer.srcObject = event.streams[0];
             _remoteJoined = true;
           });
-          _startStatsPolling(); // Start diagnostic loop immediately
+          _startStatsPolling();
         }
       };
 
@@ -129,178 +126,52 @@ class _VideoCallScreenState extends ConsumerState<VideoCallScreen> with WidgetsB
       };
 
       _pc!.onConnectionState = (state) {
-        debugPrint('PeerConnection state: $state');
         if (state == RTCPeerConnectionState.RTCPeerConnectionStateConnected) {
           _startStatsPolling();
-        } else if (state == RTCPeerConnectionState.RTCPeerConnectionStateDisconnected ||
-            state == RTCPeerConnectionState.RTCPeerConnectionStateFailed ||
-            state == RTCPeerConnectionState.RTCPeerConnectionStateClosed) {
-          _hangUp();
         }
+        // Don't automatically hang up on disconnect to allow reconnection
       };
 
       _connectSignaling();
     } catch (e) {
       debugPrint('Initialization error: $e');
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Failed to initialize call: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
-        Navigator.pop(context);
-      }
+      if (mounted) Navigator.pop(context);
     }
-  }
-
-  void _startStatsPolling() {
-    _statsPollTimer?.cancel();
-    _statsPollTimer = Timer.periodic(const Duration(seconds: 2), (_) async {
-      if (_pc == null || !mounted) return;
-
-      final stats = await _pc!.getStats();
-      for (var report in stats) {
-        // 1. More robust detection of Method & Latency
-        if (report.type == 'candidate-pair' &&
-            (report.values['nominated'] == true ||
-                report.values['state'] == 'succeeded')) {
-          final localId = report.values['localCandidateId'];
-          final remoteId = report.values['remoteCandidateId'];
-
-          String method = "Checking...";
-          try {
-            final localReport = stats.firstWhere((r) => r.id == localId);
-            final remoteReport = stats.firstWhere((r) => r.id == remoteId);
-
-            final lType = localReport.values['candidateType']
-                .toString()
-                .toLowerCase();
-            final rType = remoteReport.values['candidateType']
-                .toString()
-                .toLowerCase();
-
-            if (lType == 'relay' || rType == 'relay') {
-              method = "TURN (Relay)";
-            } else if (lType == 'srflx' || rType == 'srflx') {
-              method = "STUN (Direct)";
-            } else {
-              method = "HOST (Local)";
-            }
-          } catch (_) {}
-
-          if (mounted) {
-            setState(() {
-              _connectionMethod = method;
-              // Extract Latency: some devices use currentRoundTripTime or roundTripTime
-              final rtt =
-                  report.values['currentRoundTripTime'] ??
-                  report.values['roundTripTime'] ??
-                  0;
-              _latencyMs = rtt * 1000;
-            });
-          }
-        }
-
-        // 2. Bandwidth (Incoming Bitrate)
-        if (report.type == 'inbound-rtp' && report.values['kind'] == 'video') {
-          int currentBytes = report.values['bytesReceived'] ?? 0;
-          if (_lastBytesReceived > 0 && mounted) {
-            setState(() {
-              _bitrateMbps =
-                  ((currentBytes - _lastBytesReceived) * 8) / (2 * 1000000);
-            });
-          }
-          _lastBytesReceived = currentBytes;
-        }
-      }
-    });
-  }
-
-  // --- FIX: queue-or-apply helper ---
-  Future<void> _handleIncomingCandidate(Map<String, dynamic> c) async {
-    if (!_remoteDescriptionSet) {
-      _pendingCandidates.add(c);
-      debugPrint(
-        'Queued ICE candidate (remote description not set yet). '
-        'Queue size: ${_pendingCandidates.length}',
-      );
-      return;
-    }
-    await _addCandidateFromMap(c);
-  }
-
-  Future<void> _addCandidateFromMap(Map<String, dynamic>? c) async {
-    if (_pc == null || c == null) return;
-    try {
-      await _pc!.addCandidate(
-        RTCIceCandidate(c['candidate'], c['sdpMid'], c['sdpMLineIndex']),
-      );
-    } catch (e) {
-      debugPrint('Failed to add ICE candidate: $e');
-    }
-  }
-
-  // --- FIX: call immediately after every setRemoteDescription ---
-  Future<void> _flushPendingCandidates() async {
-    _remoteDescriptionSet = true;
-    if (_pendingCandidates.isEmpty) return;
-    debugPrint('Flushing ${_pendingCandidates.length} queued ICE candidates');
-    for (final c in _pendingCandidates) {
-      await _addCandidateFromMap(c);
-    }
-    _pendingCandidates.clear();
   }
 
   void _connectSignaling() {
     final token = supabase.auth.currentSession?.accessToken;
     _channel = WebSocketChannel.connect(
-      Uri.parse(
-        '${Config.wsBaseUrl}/ws/video/${widget.appointmentId}/?token=$token',
-      ),
+      Uri.parse('${Config.wsBaseUrl}/ws/video/${widget.appointmentId}/?token=$token'),
     );
 
     _channel!.stream.listen((event) async {
       final data = jsonDecode(event);
       switch (data['type']) {
         case 'ready':
-          // FIX: Glare handling with "Polite/Impolite" peer logic.
-          // Patient = Impolite (always initiates offer when ready).
-          // Doctor = Polite (waits for offer, but sends ready back if they were already there).
           final userProfile = ref.read(currentUserProfileProvider).valueOrNull;
-          final isPatient = userProfile?['role'] == 'patient';
-
-          if (isPatient) {
+          if (userProfile?['role'] == 'patient') {
             if (!_offerInitiated) {
-              debugPrint('Signaling: Received ready, I am patient (Impolite), initiating offer.');
               _offerInitiated = true;
               await _createOffer();
             }
           } else {
-            debugPrint('Signaling: Received ready, I am doctor (Polite), acknowledging presence.');
             _send({'type': 'ready'});
           }
           break;
         case 'offer':
-          await _pc!.setRemoteDescription(
-            RTCSessionDescription(data['sdp'], data['sdpType']),
-          );
-          await _flushPendingCandidates(); // FIX: flush right after remote desc is set
+          await _pc!.setRemoteDescription(RTCSessionDescription(data['sdp'], data['sdpType']));
+          await _flushPendingCandidates();
           final answer = await _pc!.createAnswer();
           await _pc!.setLocalDescription(answer);
           _send({'type': 'answer', 'sdp': answer.sdp, 'sdpType': answer.type});
           break;
         case 'answer':
-          await _pc!.setRemoteDescription(
-            RTCSessionDescription(data['sdp'], data['sdpType']),
-          );
-          await _flushPendingCandidates(); // FIX: flush right after remote desc is set
+          await _pc!.setRemoteDescription(RTCSessionDescription(data['sdp'], data['sdpType']));
+          await _flushPendingCandidates();
           break;
         case 'ice':
-          final c = data['candidate'];
-          await _handleIncomingCandidate(
-            c,
-          ); // FIX: queue-or-apply instead of direct add
+          await _handleIncomingCandidate(data['candidate']);
           break;
         case 'toggle-audio':
           setState(() => _remoteMicEnabled = data['enabled']);
@@ -308,20 +179,28 @@ class _VideoCallScreenState extends ConsumerState<VideoCallScreen> with WidgetsB
         case 'toggle-video':
           setState(() => _remoteCamEnabled = data['enabled']);
           break;
-        case 'bye':
+        case 'peer_disconnected':
+          // Just update UI, don't exit
           setState(() {
             _remoteJoined = false;
             _remoteRenderer.srcObject = null;
           });
-          _hangUp();
+          break;
+        case 'bye':
+          _cleanupAndExit();
           break;
       }
     }, onError: (e) {
-      debugPrint('Signaling error: $e');
-      _hangUp();
+        debugPrint('Signaling error: $e');
+        // Retry connection instead of exiting
+        Future.delayed(const Duration(seconds: 2), () => _connectSignaling());
     }, onDone: () {
-      debugPrint('Signaling closed');
-      _hangUp();
+        debugPrint('Signaling closed');
+        // Only exit if we haven't entered PiP and it's not a temporary disconnect
+        // But for now, let's try to reconnect if not explicitly hung up
+        if (!_connecting) {
+           Future.delayed(const Duration(seconds: 2), () => _connectSignaling());
+        }
     });
 
     _send({'type': 'ready'});
@@ -339,13 +218,16 @@ class _VideoCallScreenState extends ConsumerState<VideoCallScreen> with WidgetsB
     _channel?.sink.add(jsonEncode(data));
   }
 
+  void _switchCamera() {
+    if (_localStream != null && _camEnabled) {
+      Helper.switchCamera(_localStream!.getVideoTracks()[0]);
+    }
+  }
+
   void _enterPipMode() async {
     try {
-      final isSupported = await SimplePip.isPipAvailable;
-      if (isSupported) {
-        SimplePip().enterPipMode(
-          aspectRatio: (9, 16),
-        );
+      if (await SimplePip.isPipAvailable) {
+        SimplePip().enterPipMode(aspectRatio: const (9, 16));
       }
     } catch (e) {
       debugPrint('Error entering PiP mode: $e');
@@ -361,59 +243,122 @@ class _VideoCallScreenState extends ConsumerState<VideoCallScreen> with WidgetsB
     _send({'type': 'toggle-audio', 'enabled': _micEnabled});
   }
 
-  void _toggleCam() {
-    if (_localStream == null) return;
-    setState(() => _camEnabled = !_camEnabled);
-    for (var track in _localStream!.getVideoTracks()) {
-      track.enabled = _camEnabled;
+  void _toggleCam() async {
+    if (_localStream == null || _pc == null) return;
+
+    if (_camEnabled) {
+      for (var track in _localStream!.getVideoTracks()) {
+        track.enabled = false;
+        track.stop();
+      }
+      setState(() => _camEnabled = false);
+      _send({'type': 'toggle-video', 'enabled': false});
+    } else {
+      try {
+        final newStream = await navigator.mediaDevices.getUserMedia({
+          'audio': false,
+          'video': {'facingMode': 'user'},
+        });
+        final newTrack = newStream.getVideoTracks().first;
+        final senders = await _pc!.getSenders();
+        final videoSender = senders.firstWhere((s) => s.track?.kind == 'video');
+        await videoSender.replaceTrack(newTrack);
+
+        _localStream!.addTrack(newTrack);
+        _localRenderer.srcObject = _localStream;
+        setState(() => _camEnabled = true);
+        _send({'type': 'toggle-video', 'enabled': true});
+      } catch (e) {
+        debugPrint('Error re-enabling camera: $e');
+      }
     }
-    _send({'type': 'toggle-video', 'enabled': _camEnabled});
   }
 
-  Future<void> _hangUp() async {
+  void _hangUp() {
+    _send({'type': 'hangup'});
+    _cleanupAndExit();
+  }
+
+  void _cleanupAndExit() {
+    _connecting = true; // prevent reconnection
     _statsPollTimer?.cancel();
-    if (_localStream != null) {
-      for (var track in _localStream!.getTracks()) {
-        await track.stop();
-      }
-      await _localStream!.dispose();
-      _localStream = null;
-    }
-    await _pc?.close();
-    _pc = null;
+    _localStream?.getTracks().forEach((t) => t.stop());
+    _localStream?.dispose();
+    _pc?.close();
     _channel?.sink.close();
-    if (mounted) Navigator.pop(context);
+    if (mounted) Navigator.of(context).pop();
+  }
+
+  Future<void> _handleIncomingCandidate(Map<String, dynamic> c) async {
+    if (!_remoteDescriptionSet) {
+      _pendingCandidates.add(c);
+      return;
+    }
+    await _addCandidateFromMap(c);
+  }
+
+  Future<void> _addCandidateFromMap(Map<String, dynamic>? c) async {
+    if (_pc == null || c == null) return;
+    try {
+      await _pc!.addCandidate(RTCIceCandidate(c['candidate'], c['sdpMid'], c['sdpMLineIndex']));
+    } catch (e) {
+      debugPrint('Failed to add ICE candidate: $e');
+    }
+  }
+
+  Future<void> _flushPendingCandidates() async {
+    _remoteDescriptionSet = true;
+    for (final c in _pendingCandidates) {
+      await _addCandidateFromMap(c);
+    }
+    _pendingCandidates.clear();
+  }
+
+  void _startStatsPolling() {
+    _statsPollTimer?.cancel();
+    _statsPollTimer = Timer.periodic(const Duration(seconds: 2), (_) async {
+      if (_pc == null || !mounted) return;
+      final stats = await _pc!.getStats();
+      for (var report in stats) {
+        if (report.type == 'candidate-pair' && (report.values['nominated'] == true || report.values['state'] == 'succeeded')) {
+          if (mounted) {
+            setState(() {
+              final rtt = report.values['currentRoundTripTime'] ?? report.values['roundTripTime'] ?? 0;
+              _latencyMs = rtt * 1000;
+            });
+          }
+        }
+        if (report.type == 'inbound-rtp' && report.values['kind'] == 'video') {
+          int currentBytes = report.values['bytesReceived'] ?? 0;
+          if (_lastBytesReceived > 0 && mounted) {
+            setState(() => _bitrateMbps = ((currentBytes - _lastBytesReceived) * 8) / (2 * 1000000));
+          }
+          _lastBytesReceived = currentBytes;
+        }
+      }
+    });
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
-    _statsPollTimer?.cancel();
-    _localRenderer.dispose();
-    _remoteRenderer.dispose();
-    _localStream?.getTracks().forEach((t) => t.stop());
-    _localStream?.dispose();
-    _pc?.close();
-    _channel?.sink.close();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    return WillPopScope(
-      onWillPop: () async {
+    return PopScope(
+      canPop: false,
+      onPopInvoked: (didPop) {
+        if (didPop) return;
         _enterPipMode();
-        return false;
       },
       child: PipWidget(
         onPipEntered: () => setState(() => _isInPipMode = true),
         onPipExited: () => setState(() => _isInPipMode = false),
         pipChild: Scaffold(
           backgroundColor: Colors.black,
-          body: RTCVideoView(
-            _remoteRenderer,
-            objectFit: RTCVideoViewObjectFit.RTCVideoViewObjectFitCover,
-          ),
+          body: RTCVideoView(_remoteRenderer, objectFit: RTCVideoViewObjectFit.RTCVideoViewObjectFitCover),
         ),
         child: Scaffold(
           backgroundColor: Colors.black,
@@ -421,108 +366,30 @@ class _VideoCallScreenState extends ConsumerState<VideoCallScreen> with WidgetsB
               ? const Center(child: CircularProgressIndicator(color: Colors.white))
               : Stack(
                   children: [
-                    // Remote Video
                     Positioned.fill(
                       child: !_remoteJoined
-                          ? const Center(
+                          ? Center(
                               child: Text(
-                                'Waiting for the other person...',
-                                style: TextStyle(color: Colors.white70),
+                                _channel == null ? 'Connecting...' : 'Waiting for the other person...',
+                                style: const TextStyle(color: Colors.white70),
                               ),
                             )
                           : Stack(
                               children: [
-                                RTCVideoView(
-                                  _remoteRenderer,
-                                  objectFit: RTCVideoViewObjectFit
-                                      .RTCVideoViewObjectFitCover,
-                                ),
+                                RTCVideoView(_remoteRenderer, objectFit: RTCVideoViewObjectFit.RTCVideoViewObjectFitCover),
                                 if (!_remoteCamEnabled)
-                                  Container(
-                                    color: Colors.black87,
-                                    child: const Center(
-                                      child: Column(
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          Icon(
-                                            Icons.videocam_off,
-                                            color: Colors.white54,
-                                            size: 80,
-                                          ),
-                                          SizedBox(height: 16),
-                                          Text(
-                                            'Remote camera is off',
-                                            style: TextStyle(
-                                              color: Colors.white54,
-                                              fontSize: 18,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                  ),
-                                if (!_remoteMicEnabled && !_isInPipMode)
-                                  Positioned(
-                                    top: 40,
-                                    left: 16,
-                                    child: Container(
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 12,
-                                        vertical: 6,
-                                      ),
-                                      decoration: BoxDecoration(
-                                        color: Colors.redAccent.withOpacity(0.8),
-                                        borderRadius: BorderRadius.circular(20),
-                                      ),
-                                      child: const Row(
-                                        children: [
-                                          Icon(
-                                            Icons.mic_off,
-                                            color: Colors.white,
-                                            size: 16,
-                                          ),
-                                          SizedBox(width: 6),
-                                          Text(
-                                            'Remote muted',
-                                            style: TextStyle(
-                                              color: Colors.white,
-                                              fontWeight: FontWeight.bold,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                  ),
+                                  Container(color: Colors.black87, child: const Center(child: Icon(Icons.videocam_off, color: Colors.white54, size: 80))),
                               ],
                             ),
                     ),
-
-                    // Local Video Preview
                     if (_camEnabled && !_isInPipMode)
                       Positioned(
-                        top: 50,
-                        right: 20,
-                        width: 120,
-                        height: 180,
+                        top: 50, right: 20, width: 120, height: 180,
                         child: Container(
-                          decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(16),
-                            border: Border.all(color: Colors.white24, width: 2),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black.withOpacity(0.3),
-                                blurRadius: 10,
-                              ),
-                            ],
-                          ),
-                          child: ClipRRect(
-                            borderRadius: BorderRadius.circular(14),
-                            child: RTCVideoView(_localRenderer, mirror: true),
-                          ),
+                          decoration: BoxDecoration(borderRadius: BorderRadius.circular(16), border: Border.all(color: Colors.white24, width: 2)),
+                          child: ClipRRect(borderRadius: BorderRadius.circular(14), child: RTCVideoView(_localRenderer, mirror: true)),
                         ),
                       ),
-
-                    // Artifacts Overlay
                     if (_showArtifacts && !_isInPipMode)
                       Align(
                         alignment: Alignment.bottomCenter,
@@ -531,13 +398,9 @@ class _VideoCallScreenState extends ConsumerState<VideoCallScreen> with WidgetsB
                           onClose: () => setState(() => _showArtifacts = false),
                         ),
                       ),
-
-                    // Control Buttons & Diagnostic Overlay
                     if (!_isInPipMode)
                       Positioned(
-                        bottom: 30,
-                        left: 0,
-                        right: 0,
+                        bottom: 30, left: 0, right: 0,
                         child: Column(
                           mainAxisSize: MainAxisSize.min,
                           children: [
@@ -549,37 +412,13 @@ class _VideoCallScreenState extends ConsumerState<VideoCallScreen> with WidgetsB
                                   child: Container(
                                     margin: const EdgeInsets.only(bottom: 20),
                                     padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                                    decoration: BoxDecoration(
-                                      color: Colors.black54,
-                                      border: Border.all(color: Colors.white10),
-                                    ),
+                                    decoration: BoxDecoration(color: Colors.black54, border: Border.all(color: Colors.white10)),
                                     child: Column(
                                       crossAxisAlignment: CrossAxisAlignment.start,
                                       mainAxisSize: MainAxisSize.min,
                                       children: [
-                                        Text(
-                                          'Method: $_connectionMethod',
-                                          style: const TextStyle(
-                                            color: Colors.white,
-                                            fontSize: 13,
-                                            fontWeight: FontWeight.bold,
-                                          ),
-                                        ),
-                                        const SizedBox(height: 4),
-                                        Text(
-                                          'Latency: ${_latencyMs.toStringAsFixed(0)} ms',
-                                          style: const TextStyle(
-                                            color: Colors.white70,
-                                            fontSize: 12,
-                                          ),
-                                        ),
-                                        Text(
-                                          'Bandwidth: ${_bitrateMbps.toStringAsFixed(2)} Mbps',
-                                          style: const TextStyle(
-                                            color: Colors.white70,
-                                            fontSize: 12,
-                                          ),
-                                        ),
+                                        Text('Latency: ${_latencyMs.toStringAsFixed(0)} ms', style: const TextStyle(color: Colors.white70, fontSize: 12)),
+                                        Text('Bandwidth: ${_bitrateMbps.toStringAsFixed(2)} Mbps', style: const TextStyle(color: Colors.white70, fontSize: 12)),
                                       ],
                                     ),
                                   ),
@@ -589,6 +428,7 @@ class _VideoCallScreenState extends ConsumerState<VideoCallScreen> with WidgetsB
                               appointmentId: widget.appointmentId,
                               micEnabled: _micEnabled,
                               camEnabled: _camEnabled,
+                              onSwitchCamera: _switchCamera,
                               showStatsOverlay: _showStatsOverlay,
                               showArtifacts: _showArtifacts,
                               onToggleMic: _toggleMic,

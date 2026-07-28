@@ -1,121 +1,46 @@
 import json
+import asyncio
+import jwt
+import logging
 from django.db import models
 from django.conf import settings
-import jwt
 from jwt import PyJWKClient
 from channels.generic.websocket import AsyncWebsocketConsumer
 from channels.db import database_sync_to_async
 from django.core.cache import cache
+from accounts.models import User
 
-_jwks_client = PyJWKClient(settings.SUPABASE_JWKS_URL)
+logger = logging.getLogger(__name__)
+from accounts.authentication import _jwks_client
 
-
-class ChatConsumer(AsyncWebsocketConsumer):
-    async def connect(self):
-        self.appointment_id = str(self.scope['url_route']['kwargs']['appointment_id'])
-        self.room_group_name = f'chat_{self.appointment_id}'
-
-        token = self._get_token_from_query()
-        user = await self._verify_and_get_user(token)
-        if not user:
-            await self.close(code=4001)  # invalid/missing token
-            return
-        self.user = user
-
-        allowed = await self._user_in_appointment(user['id'], self.appointment_id)
-        if not allowed:
-            await self.close(code=4003)  # not your appointment
-            return
-
-        await self.channel_layer.group_add(self.room_group_name, self.channel_name)
-        await self.accept()
-
-    async def disconnect(self, close_code):
-        if hasattr(self, 'room_group_name'):
-            await self.channel_layer.group_send(
-                self.room_group_name,
-                {
-                    'type': 'signal_message',
-                    'sender_id': str(self.user['id']),
-                    'payload': {'type': 'bye'},
-                }
-            )
-            await self.channel_layer.group_discard(self.room_group_name, self.channel_name)
-
-    async def _notify_new_message(self, message_text):
-        peer_id = await self._get_peer_id()
-        if not peer_id:
-            return
-
-        group_name = f'user_notifications_{peer_id}'
-        await self.channel_layer.group_send(
-            group_name,
-            {
-                'type': 'user_notification',
-                'payload': {
-                    'type': 'new_chat_message',
-                    'appointment_id': self.appointment_id,
-                    'sender_name': self.user['full_name'] if 'full_name' in self.user else 'Someone',
-                    'message': message_text,
-                }
-            }
-        )
-
-    @database_sync_to_async
-    def _get_peer_id(self):
-        from appointments.models import Appointment
-        try:
-            appt = Appointment.objects.get(id=self.appointment_id)
-            if self.user['role'] == 'doctor':
-                return str(appt.patient_id)
-            else:
-                return str(appt.doctor_id)
-        except Exception:
-            return None
-
-    async def receive(self, text_data):
-        data = json.loads(text_data)
-        message_text = data.get('message', '')
-        if not message_text:
-            return
-
-        msg = await self._save_message(self.appointment_id, self.user['id'], message_text)
-        await self._notify_new_message(message_text)
-
-        await self.channel_layer.group_send(
-            self.room_group_name,
-            {
-                'type': 'chat_message',
-                'id': msg['id'],
-                'message': message_text,
-                'sender_id': str(self.user['id']),
-                'sent_at': msg['sent_at'],
-            }
-        )
-
-    async def chat_message(self, event):
-        await self.send(text_data=json.dumps({
-            'id': event['id'],
-            'message': event['message'],
-            'sender_id': event['sender_id'],
-            'sent_at': event['sent_at'],
-        }))
-
-    def _get_token_from_query(self):
-        qs = self.scope['query_string'].decode()
-        params = dict(p.split('=', 1) for p in qs.split('&') if '=' in p)
-        return params.get('token')
-
-    @database_sync_to_async
-    def _verify_and_get_user(self, token):
+class BaseConsumer(AsyncWebsocketConsumer):
+    async def _verify_and_get_user(self, token):
         if not token:
             return None
         try:
-            signing_key = _jwks_client.get_signing_key_from_jwt(token)
+            loop = asyncio.get_event_loop()
+            signing_key = await loop.run_in_executor(None, _jwks_client.get_signing_key_from_jwt, token)
+
             payload = jwt.decode(token, signing_key.key, algorithms=['ES256', 'RS256'], audience='authenticated')
-            from accounts.models import User
-            db_user = User.objects.get(id=payload['sub'])
+
+            return await self._get_db_user(payload['sub'])
+        except Exception as e:
+            logger.error(f"Auth error in WebSocket: {e}")
+            return None
+
+    @database_sync_to_async
+    def _get_db_user(self, user_id):
+        try:
+            db_user = User.objects.get(id=user_id)
             return {'id': db_user.id, 'role': db_user.role, 'full_name': db_user.full_name}
+        except User.DoesNotExist:
+            return None
+
+    def _get_token_from_query(self):
+        try:
+            qs = self.scope['query_string'].decode()
+            params = dict(p.split('=', 1) for p in qs.split('&') if '=' in p)
+            return params.get('token')
         except Exception:
             return None
 
@@ -126,6 +51,76 @@ class ChatConsumer(AsyncWebsocketConsumer):
             models.Q(patient_id=user_id) | models.Q(doctor_id=user_id)
         ).exists()
 
+class ChatConsumer(BaseConsumer):
+    async def connect(self):
+        self.appointment_id = str(self.scope['url_route']['kwargs']['appointment_id'])
+        self.room_group_name = f'chat_{self.appointment_id}'
+
+        token = self._get_token_from_query()
+        user = await self._verify_and_get_user(token)
+        if not user:
+            await self.close(code=4001)
+            return
+        self.user = user
+
+        allowed = await self._user_in_appointment(user['id'], self.appointment_id)
+
+        if not allowed:
+            await self.close(code=4003)
+            return
+
+        await self.channel_layer.group_add(self.room_group_name, self.channel_name)
+        await self.accept()
+
+    async def disconnect(self, close_code):
+        if hasattr(self, 'room_group_name'):
+            await self.channel_layer.group_discard(self.room_group_name, self.channel_name)
+
+    async def receive(self, text_data):
+        try:
+            data = json.loads(text_data)
+            message_text = data.get('message', '')
+            if not message_text:
+                return
+
+            msg = await self._save_message(self.appointment_id, self.user['id'], message_text)
+
+            peer_id = await self._get_peer_id()
+            if peer_id:
+                await self.channel_layer.group_send(
+                    f'user_notifications_{peer_id}',
+                    {
+                        'type': 'user_notification',
+                        'payload': {
+                            'type': 'new_chat_message',
+                            'appointment_id': self.appointment_id,
+                            'sender_name': self.user['full_name'],
+                            'message': message_text,
+                        }
+                    }
+                )
+
+            await self.channel_layer.group_send(
+                self.room_group_name,
+                {
+                    'type': 'chat_message',
+                    'id': msg['id'],
+                    'message': message_text,
+                    'sender_id': str(self.user['id']),
+                    'sent_at': msg['sent_at'],
+                }
+            )
+        except Exception as e:
+            logger.error(f"Error in ChatConsumer receive: {e}")
+
+    async def chat_message(self, event):
+        await self.send(text_data=json.dumps({
+            'id': event['id'],
+            'message': event['message'],
+            'sender_id': event['sender_id'],
+            'sent_at': event['sent_at'],
+        }))
+
     @database_sync_to_async
     def _save_message(self, appointment_id, sender_id, message_text):
         from .models import ChatMessage
@@ -134,7 +129,16 @@ class ChatConsumer(AsyncWebsocketConsumer):
         )
         return {'id': str(msg.id), 'sent_at': msg.sent_at.isoformat()}
 
-class VideoSignalConsumer(AsyncWebsocketConsumer):
+    @database_sync_to_async
+    def _get_peer_id(self):
+        from appointments.models import Appointment
+        try:
+            appt = Appointment.objects.get(id=self.appointment_id)
+            return str(appt.patient_id) if self.user['role'] == 'doctor' else str(appt.doctor_id)
+        except Exception:
+            return None
+
+class VideoSignalConsumer(BaseConsumer):
     async def connect(self):
         self.appointment_id = str(self.scope['url_route']['kwargs']['appointment_id'])
         self.room_group_name = f'video_{self.appointment_id}'
@@ -154,10 +158,8 @@ class VideoSignalConsumer(AsyncWebsocketConsumer):
         await self.channel_layer.group_add(self.room_group_name, self.channel_name)
         await self.accept()
 
-        # Track presence in cache
         cache_key = f"video_presence_{self.appointment_id}_{self.user['role']}"
-        cache.set(cache_key, True, timeout=300) # 5 minutes instead of 1 hour
-        print(f"DEBUG: Presence ON for {self.user['role']} in appt {self.appointment_id}")
+        cache.set(cache_key, True, timeout=300)
 
         await self._notify_peer_presence(is_joining=True)
 
@@ -165,28 +167,54 @@ class VideoSignalConsumer(AsyncWebsocketConsumer):
         if hasattr(self, 'room_group_name'):
             cache_key = f"video_presence_{self.appointment_id}_{self.user['role']}"
             cache.delete(cache_key)
-            print(f"DEBUG: Presence OFF for {self.user['role']} in appt {self.appointment_id}")
-
-            await self._notify_peer_presence(is_joining=False)
 
             await self.channel_layer.group_send(
                 self.room_group_name,
                 {
                     'type': 'signal_message',
                     'sender_id': str(self.user['id']),
-                    'payload': {'type': 'bye'},
+                    'payload': {'type': 'peer_disconnected'},
                 }
             )
             await self.channel_layer.group_discard(self.room_group_name, self.channel_name)
 
+    async def receive(self, text_data):
+        try:
+            data = json.loads(text_data)
+            if data.get('type') == 'hangup':
+                await self.channel_layer.group_send(
+                    self.room_group_name,
+                    {
+                        'type': 'signal_message',
+                        'sender_id': str(self.user['id']),
+                        'payload': {'type': 'bye'},
+                    }
+                )
+            else:
+                await self.channel_layer.group_send(
+                    self.room_group_name,
+                    {
+                        'type': 'signal_message',
+                        'sender_id': str(self.user['id']),
+                        'payload': data,
+                    }
+                )
+        except Exception as e:
+            logger.error(f"Error in VideoConsumer receive: {e}")
+
+    async def signal_message(self, event):
+        try:
+            if event['sender_id'] != str(self.user['id']):
+                await self.send(text_data=json.dumps(event['payload']))
+        except Exception:
+            pass
+
     async def _notify_peer_presence(self, is_joining):
         peer_id = await self._get_peer_id()
-        if not peer_id:
-            return
+        if not peer_id: return
 
-        group_name = f'user_notifications_{peer_id}'
         await self.channel_layer.group_send(
-            group_name,
+            f'user_notifications_{peer_id}',
             {
                 'type': 'user_notification',
                 'payload': {
@@ -198,75 +226,11 @@ class VideoSignalConsumer(AsyncWebsocketConsumer):
             }
         )
 
-        # FCM Push only on joining
-        if is_joining:
-            await self._send_push_notification(peer_id)
-
-    async def _send_push_notification(self, peer_id):
-        from notifications.services import notify_user
-        def trigger_push():
-            role_name = "Doctor" if self.user['role'] == 'doctor' else "Patient"
-            notify_user(
-                user_id=peer_id,
-                type='general',
-                title='Call is ready!',
-                body=f'Your {role_name} has joined the video room and is waiting for you.',
-                data={
-                    'appointment_id': self.appointment_id,
-                    'click_action': 'FLUTTER_NOTIFICATION_CLICK',
-                }
-            )
-        import threading
-        threading.Thread(target=trigger_push).start()
-
     @database_sync_to_async
     def _get_peer_id(self):
         from appointments.models import Appointment
         try:
             appt = Appointment.objects.get(id=self.appointment_id)
-            if self.user['role'] == 'doctor':
-                return str(appt.patient_id)
-            else:
-                return str(appt.doctor_id)
+            return str(appt.patient_id) if self.user['role'] == 'doctor' else str(appt.doctor_id)
         except Exception:
             return None
-
-    async def receive(self, text_data):
-        data = json.loads(text_data)
-        await self.channel_layer.group_send(
-            self.room_group_name,
-            {
-                'type': 'signal_message',
-                'sender_id': str(self.user['id']),
-                'payload': data,
-            }
-        )
-
-    async def signal_message(self, event):
-        if event['sender_id'] != str(self.user['id']):
-            await self.send(text_data=json.dumps(event['payload']))
-
-    def _get_token_from_query(self):
-        qs = self.scope['query_string'].decode()
-        params = dict(p.split('=', 1) for p in qs.split('&') if '=' in p)
-        return params.get('token')
-
-    @database_sync_to_async
-    def _verify_and_get_user(self, token):
-        if not token:
-            return None
-        try:
-            signing_key = _jwks_client.get_signing_key_from_jwt(token)
-            payload = jwt.decode(token, signing_key.key, algorithms=['ES256', 'RS256'], audience='authenticated')
-            from accounts.models import User
-            db_user = User.objects.get(id=payload['sub'])
-            return {'id': db_user.id, 'role': db_user.role, 'full_name': db_user.full_name}
-        except Exception:
-            return None
-
-    @database_sync_to_async
-    def _user_in_appointment(self, user_id, appointment_id):
-        from appointments.models import Appointment
-        return Appointment.objects.filter(id=appointment_id).filter(
-            models.Q(patient_id=user_id) | models.Q(doctor_id=user_id)
-        ).exists()

@@ -1,11 +1,13 @@
 import json
+import asyncio
+import logging
 from channels.generic.websocket import AsyncWebsocketConsumer
 from django.conf import settings
 import jwt
 from jwt import PyJWKClient
 from channels.db import database_sync_to_async
 
-_jwks_client = PyJWKClient(settings.SUPABASE_JWKS_URL)
+from accounts.authentication import _jwks_client
 
 class NotificationConsumer(AsyncWebsocketConsumer):
     async def connect(self):
@@ -20,7 +22,6 @@ class NotificationConsumer(AsyncWebsocketConsumer):
         self.user_id = str(user['id'])
         self.room_group_name = f'user_notifications_{self.user_id}'
 
-        # Join personal user group
         await self.channel_layer.group_add(
             self.room_group_name,
             self.channel_name
@@ -35,7 +36,6 @@ class NotificationConsumer(AsyncWebsocketConsumer):
             )
 
     async def user_notification(self, event):
-        # Send message to WebSocket
         await self.send(text_data=json.dumps(event['payload']))
 
     def _get_token_from_query(self):
@@ -43,15 +43,23 @@ class NotificationConsumer(AsyncWebsocketConsumer):
         params = dict(p.split('=', 1) for p in qs.split('&') if '=' in p)
         return params.get('token')
 
-    @database_sync_to_async
-    def _verify_and_get_user(self, token):
+    async def _verify_and_get_user(self, token):
         if not token:
             return None
         try:
-            signing_key = _jwks_client.get_signing_key_from_jwt(token)
+            loop = asyncio.get_event_loop()
+            signing_key = await loop.run_in_executor(None, _jwks_client.get_signing_key_from_jwt, token)
             payload = jwt.decode(token, signing_key.key, algorithms=['ES256', 'RS256'], audience='authenticated')
-            from accounts.models import User
-            db_user = User.objects.get(id=payload['sub'])
-            return {'id': db_user.id, 'role': db_user.role}
+
+            return await self._get_db_user(payload['sub'])
         except Exception:
+            return None
+
+    @database_sync_to_async
+    def _get_db_user(self, user_id):
+        from accounts.models import User
+        try:
+            db_user = User.objects.get(id=user_id)
+            return {'id': db_user.id, 'role': db_user.role}
+        except User.DoesNotExist:
             return None

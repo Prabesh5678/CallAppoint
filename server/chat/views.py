@@ -34,10 +34,12 @@ def check_video_presence(request, appointment_id):
     """
     user = request.user
     # 1. Security check: user must be part of the appointment
-    appt = Appointment.objects.filter(
+    # Optimization: Use exists() or just select necessary fields
+    appt_exists = Appointment.objects.filter(
         Q(id=appointment_id) & (Q(patient_id=user.id) | Q(doctor_id=user.id))
-    ).first()
-    if not appt:
+    ).exists()
+
+    if not appt_exists:
         return Response({"error": "Unauthorized"}, status=403)
 
     # 2. Determine other role

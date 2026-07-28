@@ -14,6 +14,7 @@ class CallControls extends ConsumerWidget {
   final bool showArtifacts;
   final VoidCallback onToggleMic;
   final VoidCallback onToggleCam;
+  final VoidCallback onSwitchCamera;
   final VoidCallback onToggleStats;
   final VoidCallback onToggleArtifacts;
   final VoidCallback onHangUp;
@@ -23,6 +24,7 @@ class CallControls extends ConsumerWidget {
     required this.appointmentId,
     required this.micEnabled,
     required this.camEnabled,
+    required this.onSwitchCamera,
     required this.showStatsOverlay,
     required this.showArtifacts,
     required this.onToggleMic,
@@ -75,6 +77,11 @@ class CallControls extends ConsumerWidget {
                 icon: camEnabled ? Icons.videocam : Icons.videocam_off,
                 color: camEnabled ? Colors.white12 : Colors.redAccent,
                 onPressed: onToggleCam,
+              ),
+              _ControlButton(
+                icon: Icons.flip_camera_ios,
+                color: Colors.white12,
+                onPressed: onSwitchCamera,
               ),
               _ControlButton(
                 icon: Icons.list_alt,

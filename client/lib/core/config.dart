@@ -11,13 +11,13 @@ class Config {
     if (envUrl.isNotEmpty) return envUrl;
 
     if (kDebugMode) {
-      if (kIsWeb) return 'http://localhost:8000/api';
+      if (kIsWeb) return 'http://127.0.0.1:8000/api';
 
       // Android Emulator uses 10.0.2.2 to access host's localhost
       if (defaultTargetPlatform == TargetPlatform.android) {
         return 'http://10.0.2.2:8000/api';
       }
-      return 'http://localhost:8000/api';
+      return 'http://127.0.0.1:8000/api';
     }
     return _prodBaseUrl;
   }
@@ -27,11 +27,11 @@ class Config {
     if (envWsUrl.isNotEmpty) return envWsUrl;
 
     if (kDebugMode) {
-      if (kIsWeb) return 'ws://localhost:8000';
+      if (kIsWeb) return 'ws://127.0.0.1:8000';
       if (defaultTargetPlatform == TargetPlatform.android) {
         return 'ws://10.0.2.2:8000';
       }
-      return 'ws://localhost:8000';
+      return 'ws://127.0.0.1:8000';
     }
     return _prodWsUrl;
   }
