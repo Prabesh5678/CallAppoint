@@ -63,7 +63,7 @@ class _BlogPostRowState extends State<BlogPostRow> {
         const SizedBox(height: 12),
         Row(
           children: [
-            if (widget.blog.doctorAvatarUrl != null)
+            if (widget.blog.doctorAvatarUrl != null && widget.blog.doctorAvatarUrl!.isNotEmpty)
               CircleAvatar(
                 radius: isMobile ? 11 : 10,
                 backgroundImage: CachedNetworkImageProvider(widget.blog.doctorAvatarUrl!),
@@ -113,7 +113,7 @@ class _BlogPostRowState extends State<BlogPostRow> {
               AnimatedScale(
                 scale: _isHovered ? 1.04 : 1.0,
                 duration: const Duration(milliseconds: 300),
-                child: widget.blog.thumbnailUrl != null
+                child: (widget.blog.thumbnailUrl != null && widget.blog.thumbnailUrl!.isNotEmpty)
                     ? CachedNetworkImage(
                         imageUrl: widget.blog.thumbnailUrl!,
                         fit: BoxFit.cover,

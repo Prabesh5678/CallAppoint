@@ -166,10 +166,10 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                     children: [
                       CircleAvatar(
                         radius: 50,
-                        backgroundImage: _avatarUrlController.text.isNotEmpty
-                            ? NetworkImage(_avatarUrlController.text)
+                        backgroundImage: (_avatarUrlController.text.trim().isNotEmpty)
+                            ? NetworkImage(_avatarUrlController.text.trim())
                             : null,
-                        child: _avatarUrlController.text.isEmpty
+                        child: (_avatarUrlController.text.trim().isEmpty)
                             ? const Icon(Icons.person, size: 50)
                             : null,
                       ),

@@ -6,6 +6,7 @@ import '../../features/appointments/providers/appointment_provider.dart';
 import '../../core/globals.dart';
 import 'package:go_router/go_router.dart';
 import 'pulse_indicator.dart';
+import 'glowing_effect.dart';
 
 class AppointmentCard extends ConsumerWidget {
   final Appointment appointment;
@@ -103,7 +104,7 @@ class AppointmentCard extends ConsumerWidget {
               ),
               const SizedBox(height: 6),
               Text(
-                dateFmt.format(appointment.scheduledStart.toLocal()),
+                dateFmt.format(appointment.scheduledStart),
                 style: TextStyle(color: Theme.of(context).hintColor),
               ),
 
@@ -160,13 +161,21 @@ class AppointmentCard extends ConsumerWidget {
                       child: Stack(
                         alignment: Alignment.center,
                         children: [
-                          ElevatedButton.icon(
-                            icon: const Icon(Icons.videocam, size: 18),
-                            label: const Text('Join Call'),
-                            onPressed: () =>
-                                context.push('/video/${appointment.id}'),
+                          GlowingEffect(
+                            isGlowing: isActiveCall,
+                            color: Colors.green,
+                            child: ElevatedButton.icon(
+                              icon: const Icon(Icons.videocam, size: 18),
+                              label: Text(isActiveCall ? 'Return to Call' : 'Join Call'),
+                              onPressed: () =>
+                                  context.push('/video/${appointment.id}'),
+                              style: isActiveCall ? ElevatedButton.styleFrom(
+                                backgroundColor: Colors.green,
+                                foregroundColor: Colors.white,
+                              ) : null,
+                            ),
                           ),
-                          if (isOtherWaiting)
+                          if (isOtherWaiting && !isActiveCall)
                             Positioned(
                               right: 8,
                               top: 8,

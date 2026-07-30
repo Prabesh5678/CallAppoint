@@ -37,4 +37,7 @@ class Config {
   }
 
   static String get adminApiBaseUrl => '$apiBaseUrl/admin-panel';
+
+  // Khalti Configuration
+  static const String khaltiPublicKey = '7a2e21b7eb0d4c348ad814d611c0bd22';
 }

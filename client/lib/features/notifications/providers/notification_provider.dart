@@ -91,11 +91,12 @@ class NotificationManager extends StateNotifier<Map<String, bool>> {
 
       if (isPresent) {
         // Don't show "waiting" notification if we are already in THIS call
-        // This handles the case where the doctor joins and the patient (already in call)
-        // should NOT get a notification that the doctor is ready.
+        // or on the video screen in general (where we already see the status)
         final activeCallId = ref.read(activeCallIdProvider);
-        if (activeCallId == apptId) {
-          debugPrint('NotificationManager: Already in call $apptId, skipping notification');
+        final isInVideoScreen = ref.read(isInVideoCallScreenProvider);
+
+        if (activeCallId == apptId || isInVideoScreen) {
+          debugPrint('NotificationManager: Already in call or on video screen, skipping notification');
           return;
         }
 

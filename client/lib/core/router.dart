@@ -118,9 +118,7 @@ class _HomeRouterState extends ConsumerState<HomeRouter> {
   @override
   void initState() {
     super.initState();
-    // force a fresh /me/ fetch every time this screen is entered,
-    // rather than relying on Riverpod's equality check on the auth stream
-    Future.microtask(() => ref.invalidate(currentUserProfileProvider));
+    // Removed aggressive invalidation that causes request spikes
   }
 
   @override

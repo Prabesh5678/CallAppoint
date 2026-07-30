@@ -13,6 +13,12 @@ _csrf_origins = config('CSRF_TRUSTED_ORIGINS', default='https://call-appoint.azu
 CSRF_TRUSTED_ORIGINS = _csrf_origins.split(',')
 SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 
+# Force HTTPS in production
+if not DEBUG:
+    SECURE_SSL_REDIRECT = True
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
+
 INSTALLED_APPS = [
     'daphne',
     'django.contrib.admin',
@@ -138,8 +144,15 @@ CORS_ALLOW_HEADERS = list(default_headers) + [
 
 KHALTI_SECRET_KEY = config('KHALTI_SECRET_KEY')
 KHALTI_BASE_URL = config('KHALTI_BASE_URL', default='https://dev.khalti.com/api/v2/epayment')
-KHALTI_RETURN_URL = config('KHALTI_RETURN_URL', default='https://call-appoint.azurewebsites.net/payment-callback')
+KHALTI_RETURN_URL = config('KHALTI_RETURN_URL', default='https://call-appoint.azurewebsites.net/payment-callback/')
 KHALTI_WEBSITE_URL = config('KHALTI_WEBSITE_URL', default='https://call-appoint.azurewebsites.net')
+
+# Ensure HTTPS for Khalti URLs in production
+if not DEBUG:
+    if KHALTI_RETURN_URL.startswith('http://'):
+        KHALTI_RETURN_URL = KHALTI_RETURN_URL.replace('http://', 'https://')
+    if KHALTI_WEBSITE_URL.startswith('http://'):
+        KHALTI_WEBSITE_URL = KHALTI_WEBSITE_URL.replace('http://', 'https://')
 
 ADMIN_API_TOKEN = config('ADMIN_API_TOKEN', default='dev_admin_token_12345')
 ADMIN_USERNAME = config('ADMIN_USERNAME', default='admin')

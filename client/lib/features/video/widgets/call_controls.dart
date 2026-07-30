@@ -1,6 +1,7 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import '../../auth/providers/auth_provider.dart';
 import '../../appointments/providers/artifact_provider.dart';
 import '../../appointments/widgets/create_artifact_dialog.dart';
@@ -56,6 +57,11 @@ class CallControls extends ConsumerWidget {
                 icon: showStatsOverlay ? Icons.analytics : Icons.analytics_outlined,
                 color: showStatsOverlay ? Colors.blueAccent : Colors.white12,
                 onPressed: onToggleStats,
+              ),
+              _ControlButton(
+                icon: Icons.chat,
+                color: Colors.white12,
+                onPressed: () => context.push('/chat/$appointmentId'),
               ),
               _ControlButton(
                 icon: micEnabled ? Icons.mic : Icons.mic_off,

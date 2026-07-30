@@ -50,6 +50,18 @@ class MyAppointmentsView(generics.ListAPIView):
             return base_qs.filter(doctor_id=user.id)
         return Appointment.objects.none()
 
+class AppointmentDetailView(generics.RetrieveAPIView):
+    serializer_class = AppointmentSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        user = self.request.user
+        if user.role == 'patient':
+            return Appointment.objects.filter(patient_id=user.id)
+        elif user.role == 'doctor':
+            return Appointment.objects.filter(doctor_id=user.id)
+        return Appointment.objects.none()
+
 class BookAppointmentView(generics.CreateAPIView):
     serializer_class = AppointmentCreateSerializer
     permission_classes = [IsAuthenticated]

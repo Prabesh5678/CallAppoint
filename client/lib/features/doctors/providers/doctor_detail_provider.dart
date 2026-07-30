@@ -18,8 +18,8 @@ class Slot {
 
   factory Slot.fromJson(Map<String, dynamic> json) {
     return Slot(
-      start: DateTime.parse(json['start']),
-      end: DateTime.parse(json['end']),
+      start: DateTime.parse(json['start']).toLocal(),
+      end: DateTime.parse(json['end']).toLocal(),
       isAvailable: json['is_available'] ?? true,
     );
   }

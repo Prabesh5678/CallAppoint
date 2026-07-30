@@ -12,8 +12,8 @@ class PaymentController {
       '/payments/khalti/initiate/',
       data: {
         'doctor': doctorId,
-        'scheduled_start': start.toIso8601String(),
-        'scheduled_end': end.toIso8601String(),
+        'scheduled_start': start.toUtc().toIso8601String(),
+        'scheduled_end': end.toUtc().toIso8601String(),
         'reason_for_visit': reason ?? '',
       },
     );

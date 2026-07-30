@@ -15,7 +15,7 @@ def initiate_payment(*, amount_paisa, purchase_order_id, purchase_order_name, cu
     resp = requests.post(
         f"{KHALTI_BASE}/initiate/",
         headers={
-            "Authorization": f"key {settings.KHALTI_SECRET_KEY}",
+            "Authorization": f"Key {settings.KHALTI_SECRET_KEY}",
             "Content-Type": "application/json",
         },
         json={
@@ -36,7 +36,7 @@ def lookup_payment(pidx):
     """Server-to-server verification — the only source of truth for payment status."""
     resp = requests.post(
         f"{KHALTI_BASE}/lookup/",
-        headers={"Authorization": f"key {settings.KHALTI_SECRET_KEY}"},
+        headers={"Authorization": f"Key {settings.KHALTI_SECRET_KEY}"},
         json={"pidx": pidx},
         timeout=15,
     )

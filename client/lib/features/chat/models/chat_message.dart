@@ -16,7 +16,7 @@ class ChatMessage {
       id: json['id'],
       senderId: json['sender'],
       message: json['message'] ?? '',
-      sentAt: DateTime.parse(json['sent_at']),
+      sentAt: DateTime.parse(json['sent_at']).toLocal(),
     );
   }
 
@@ -25,7 +25,7 @@ class ChatMessage {
       id: json['id'],
       senderId: json['sender_id'],
       message: json['message'] ?? '',
-      sentAt: DateTime.parse(json['sent_at']),
+      sentAt: DateTime.parse(json['sent_at']).toLocal(),
     );
   }
 }

@@ -2,6 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:khalti_checkout_flutter/khalti_checkout_flutter.dart';
+import 'package:url_launcher/url_launcher.dart';
+import 'package:flutter/foundation.dart';
+import '../../../core/config.dart';
+import '../../../core/globals.dart';
 import '../../payments/providers/payment_provider.dart';
 import '../providers/doctor_detail_provider.dart';
 import '../models/doctor.dart';
@@ -107,9 +111,10 @@ class _DoctorDetailScreenState extends ConsumerState<DoctorDetailScreen>
       if (result['status'] == 'success') {
         _pendingPidx = null;
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
+          rootScaffoldMessengerKey.currentState?.showSnackBar(
             const SnackBar(
               content: Text('Payment successful! Appointment confirmed.'),
+              backgroundColor: Colors.green,
             ),
           );
           Navigator.pop(context);
@@ -117,7 +122,7 @@ class _DoctorDetailScreenState extends ConsumerState<DoctorDetailScreen>
       } else if (result['status'] == 'failed') {
         _pendingPidx = null;
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
+          rootScaffoldMessengerKey.currentState?.showSnackBar(
             const SnackBar(
               content: Text('Payment was not completed.'),
               backgroundColor: Colors.red,
@@ -126,7 +131,7 @@ class _DoctorDetailScreenState extends ConsumerState<DoctorDetailScreen>
         }
       } else {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
+          rootScaffoldMessengerKey.currentState?.showSnackBar(
             const SnackBar(
               content: Text(
                 'Payment not confirmed yet. Try again in a moment.',
@@ -165,8 +170,41 @@ class _DoctorDetailScreenState extends ConsumerState<DoctorDetailScreen>
       final paymentUrl = initiateData['payment_url'];
       _pendingPidx = pidx;
 
+      // Handle Web: Khalti does not allow iframes on Web (X-Frame-Options: DENY)
+      if (kIsWeb) {
+        if (paymentUrl != null) {
+          final uri = Uri.parse(paymentUrl);
+          if (await canLaunchUrl(uri)) {
+            await launchUrl(uri, mode: LaunchMode.externalApplication);
+
+            // On web, we show a dialog to check status after they return
+            if (mounted) {
+              showDialog(
+                context: context,
+                barrierDismissible: false,
+                builder: (context) => AlertDialog(
+                  title: const Text('Payment Initiated'),
+                  content: const Text('Please complete the payment in the new tab. Click below once done.'),
+                  actions: [
+                    TextButton(
+                      onPressed: () {
+                        Navigator.pop(context);
+                        _checkPendingPayment();
+                      },
+                      child: const Text('I have completed the payment'),
+                    ),
+                  ],
+                ),
+              );
+            }
+          }
+        }
+        setState(() => _booking = false);
+        return;
+      }
+
       final payConfig = KhaltiPayConfig(
-        publicKey: '7a2e21b7eb0d4c348ad814d611c0bd22',
+        publicKey: Config.khaltiPublicKey,
         pidx: pidx,
         paymentUrl: paymentUrl,
         environment: Environment.test,
@@ -177,20 +215,24 @@ class _DoctorDetailScreenState extends ConsumerState<DoctorDetailScreen>
         payConfig: payConfig,
         onPaymentResult: (paymentResult, khalti) async {
           khalti.close(context);
+          final currentPidx = _pendingPidx;
           _pendingPidx = null;
           try {
-            await ref.read(paymentControllerProvider).verify(pidx);
+            if (currentPidx != null) {
+              await ref.read(paymentControllerProvider).verify(currentPidx);
+            }
             if (mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(
+              rootScaffoldMessengerKey.currentState?.showSnackBar(
                 const SnackBar(
                   content: Text('Payment successful! Appointment confirmed.'),
+                  backgroundColor: Colors.green,
                 ),
               );
               Navigator.pop(context);
             }
           } catch (e) {
             if (mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(
+              rootScaffoldMessengerKey.currentState?.showSnackBar(
                 SnackBar(
                   content: Text('Payment verification failed: $e'),
                   backgroundColor: Colors.red,
@@ -215,7 +257,7 @@ class _DoctorDetailScreenState extends ConsumerState<DoctorDetailScreen>
               if (!mounted) return;
 
               if (event == KhaltiEvent.kpgDisposed) {
-                ScaffoldMessenger.of(context).showSnackBar(
+                rootScaffoldMessengerKey.currentState?.showSnackBar(
                   const SnackBar(
                     content: Text(
                       'Checkout closed. Checking payment status...',
@@ -225,7 +267,7 @@ class _DoctorDetailScreenState extends ConsumerState<DoctorDetailScreen>
                 _checkPendingPayment();
               } else {
                 _pendingPidx = null;
-                ScaffoldMessenger.of(context).showSnackBar(
+                rootScaffoldMessengerKey.currentState?.showSnackBar(
                   SnackBar(
                     content: Text(
                       'Payment failed: ${description ?? 'Unknown error'}',
@@ -288,10 +330,10 @@ class _DoctorDetailScreenState extends ConsumerState<DoctorDetailScreen>
                       children: [
                         CircleAvatar(
                           radius: 40,
-                          backgroundImage: doctor.avatarUrl != null
+                          backgroundImage: (doctor.avatarUrl != null && doctor.avatarUrl!.isNotEmpty)
                               ? NetworkImage(doctor.avatarUrl!)
                               : null,
-                          child: doctor.avatarUrl == null
+                          child: (doctor.avatarUrl == null || doctor.avatarUrl!.isEmpty)
                               ? const Icon(Icons.person, size: 40)
                               : null,
                         ),
@@ -485,8 +527,8 @@ class _DoctorDetailScreenState extends ConsumerState<DoctorDetailScreen>
                     runSpacing: 10,
                     children: slots.map((slot) {
                       final isSelected = _selectedSlot?.start == slot.start;
-                      final startTimeStr = DateFormat('h:mm').format(slot.start.toLocal());
-                      final endTimeStr = DateFormat('h:mm a').format(slot.end.toLocal());
+                      final startTimeStr = DateFormat('h:mm').format(slot.start);
+                      final endTimeStr = DateFormat('h:mm a').format(slot.end);
 
                       return ChoiceChip(
                         label: Text(

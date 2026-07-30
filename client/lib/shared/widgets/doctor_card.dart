@@ -24,10 +24,10 @@ class DoctorCard extends StatelessWidget {
             children: [
               CircleAvatar(
                 radius: 32,
-                backgroundImage: doctor.avatarUrl != null
+                backgroundImage: (doctor.avatarUrl != null && doctor.avatarUrl!.isNotEmpty)
                     ? NetworkImage(doctor.avatarUrl!)
                     : null,
-                child: doctor.avatarUrl == null
+                child: (doctor.avatarUrl == null || doctor.avatarUrl!.isEmpty)
                     ? const Icon(Icons.person, size: 32)
                     : null,
               ),

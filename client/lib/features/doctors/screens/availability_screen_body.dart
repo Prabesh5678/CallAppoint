@@ -205,7 +205,7 @@ class _FollowupWarning extends StatelessWidget {
     // Convert DateTime.weekday to our model format: (weekday % 7)
     final relevantAppts = appointments.where((a) {
       if (a.status != 'confirmed') return false;
-      final apptDay = a.scheduledStart.toLocal().weekday % 7;
+      final apptDay = a.scheduledStart.weekday % 7;
       return apptDay == selectedDay && a.scheduledStart.isAfter(DateTime.now());
     }).toList()
       ..sort((a, b) => a.scheduledStart.compareTo(b.scheduledStart));
@@ -241,7 +241,7 @@ class _FollowupWarning extends StatelessWidget {
           ...displayAppts.map((a) => Padding(
             padding: const EdgeInsets.only(top: 4),
             child: Text(
-              '• ${DateFormat('MMM d, h:mm a').format(a.scheduledStart.toLocal())} (${a.patientName})',
+              '• ${DateFormat('MMM d, h:mm a').format(a.scheduledStart)} (${a.patientName})',
               style: const TextStyle(fontSize: 13),
             ),
           )),
@@ -314,7 +314,7 @@ class _DayManagementCardState extends ConsumerState<_DayManagementCard> {
   Widget build(BuildContext context) {
     final hasAppts = widget.appointments.any((a) =>
         a.status == 'confirmed' &&
-        (a.scheduledStart.toLocal().weekday % 7) == widget.dayIndex &&
+        (a.scheduledStart.weekday % 7) == widget.dayIndex &&
         a.scheduledStart.isAfter(DateTime.now()));
 
     return Card(

@@ -39,8 +39,8 @@ class Artifact {
       title: json['title'] ?? '',
       content: json['content'],
       fileUrl: json['file_url'],
-      createdAt: DateTime.parse(json['created_at']),
-      updatedAt: DateTime.parse(json['updated_at']),
+      createdAt: DateTime.parse(json['created_at']).toLocal(),
+      updatedAt: DateTime.parse(json['updated_at']).toLocal(),
     );
   }
 }

@@ -41,8 +41,8 @@ class Blog {
       content: json['content'] ?? '',
       thumbnailUrl: json['thumbnail_url'],
       category: json['category'] ?? 'General',
-      createdAt: DateTime.parse(json['created_at']),
-      updatedAt: DateTime.parse(json['updated_at']),
+      createdAt: DateTime.parse(json['created_at']).toLocal(),
+      updatedAt: DateTime.parse(json['updated_at']).toLocal(),
     );
   }
 

@@ -365,7 +365,7 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> wit
                   const Divider(),
 
                   _buildDetailRow('Status', doc['verification_status']?.toString().toUpperCase()),
-                  _buildDetailRow('Joined', doc['created_at'] != null ? DateFormat('MMM dd, yyyy').format(DateTime.parse(doc['created_at'].toString())) : 'Unknown'),
+                  _buildDetailRow('Joined', doc['created_at'] != null ? DateFormat('MMM dd, yyyy').format(DateTime.parse(doc['created_at'].toString()).toLocal()) : 'Unknown'),
                   const SizedBox(height: 16),
                   const Text('Bio', style: TextStyle(fontWeight: FontWeight.bold)),
                   const SizedBox(height: 4),
@@ -435,7 +435,7 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> wit
               _buildDetailRow('Phone', p['phone']),
               _buildDetailRow('Gender', p['gender']),
               _buildDetailRow('Date of Birth', p['date_of_birth']),
-              _buildDetailRow('Joined', p['created_at'] != null ? DateFormat('MMM dd, yyyy').format(DateTime.parse(p['created_at'])) : 'Unknown'),
+              _buildDetailRow('Joined', p['created_at'] != null ? DateFormat('MMM dd, yyyy').format(DateTime.parse(p['created_at']).toLocal()) : 'Unknown'),
             ],
           ),
         ),

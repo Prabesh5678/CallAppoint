@@ -28,6 +28,11 @@ final myAppointmentsProvider = AsyncNotifierProvider.autoDispose<MyAppointmentsN
   () => MyAppointmentsNotifier(),
 );
 
+final appointmentDetailProvider = FutureProvider.family.autoDispose<Appointment, String>((ref, id) async {
+  final response = await DioClient.instance.get('/appointments/$id/');
+  return Appointment.fromJson(response.data);
+});
+
 final peerPresenceProvider = StreamProvider.family.autoDispose<bool, String>((ref, appointmentId) async* {
   final socketStatus = ref.watch(notificationManagerProvider.select((map) => map[appointmentId]));
 
@@ -94,8 +99,8 @@ class AppointmentActions {
       '/appointments/book/',
       data: {
         'doctor': doctorId,
-        'scheduled_start': start.toIso8601String(),
-        'scheduled_end': end.toIso8601String(),
+        'scheduled_start': start.toUtc().toIso8601String(),
+        'scheduled_end': end.toUtc().toIso8601String(),
         'reason_for_visit': reason,
         'parent_appointment': parentAppointmentId,
       },

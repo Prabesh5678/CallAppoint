@@ -18,13 +18,14 @@ class _CreateArtifactDialogState extends State<CreateArtifactDialog> {
   String _selectedType = 'Clinical Note';
   bool _isLoading = false;
 
-  final List<String> _reportTypes = [
-    'Clinical Note',
-    'Laboratory Referral',
-    'Radiology Order',
-    'Diagnosis',
-    'Other'
-  ];
+  final Map<String, IconData> _reportTypes = {
+    'Clinical Note': Icons.note_alt_outlined,
+    'Laboratory Referral': Icons.biotech_outlined,
+    'Radiology Order': Icons.settings_remote_outlined,
+    'Diagnosis': Icons.assignment_outlined,
+    'Prescription': Icons.medical_services_outlined,
+    'Other': Icons.more_horiz_outlined,
+  };
 
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
@@ -38,24 +39,26 @@ class _CreateArtifactDialogState extends State<CreateArtifactDialog> {
         'content': _contentController.text,
       });
 
-      // Invalidate the provider to refresh the list
-      // Note: we can't easily access ref here since it's a StatefulWidget,
-      // but the caller can handle the refresh if we return true.
-
       if (mounted) {
         Navigator.pop(context, true);
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Artifact created successfully')),
+          SnackBar(
+            content: const Text('Artifact created successfully'),
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            backgroundColor: Colors.green,
+          ),
         );
       }
     } catch (e) {
       debugPrint('Error creating artifact: $e');
-      if (e is DioException) {
-        debugPrint('Response data: ${e.response?.data}');
-      }
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to create artifact: $e')),
+          SnackBar(
+            content: Text('Failed to create artifact: ${e.toString()}'),
+            backgroundColor: Colors.red,
+            behavior: SnackBarBehavior.floating,
+          ),
         );
       }
     } finally {
@@ -65,57 +68,118 @@ class _CreateArtifactDialogState extends State<CreateArtifactDialog> {
 
   @override
   Widget build(BuildContext context) {
-    return AlertDialog(
-      title: const Text('Create Clinical Artifact'),
-      content: SingleChildScrollView(
-        child: Form(
-          key: _formKey,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              DropdownButtonFormField<String>(
-                value: _selectedType,
-                decoration: const InputDecoration(labelText: 'Report Type'),
-                items: _reportTypes.map((type) {
-                  return DropdownMenuItem(value: type, child: Text(type));
-                }).toList(),
-                onChanged: (val) => setState(() => _selectedType = val!),
+    final theme = Theme.of(context);
+
+    return Dialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 500),
+        child: SingleChildScrollView(
+          child: Padding(
+            padding: const EdgeInsets.all(24.0),
+            child: Form(
+              key: _formKey,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Icon(Icons.add_chart, color: theme.colorScheme.primary, size: 28),
+                      const SizedBox(width: 12),
+                      Text(
+                        'New Clinical Artifact',
+                        style: theme.textTheme.headlineSmall?.copyWith(
+                          fontWeight: FontWeight.bold,
+                          color: theme.colorScheme.onSurface,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Create a permanent clinical record for this session.',
+                    style: theme.textTheme.bodyMedium?.copyWith(color: theme.hintColor),
+                  ),
+                  const SizedBox(height: 24),
+
+                  DropdownButtonFormField<String>(
+                    value: _selectedType,
+                    decoration: InputDecoration(
+                      labelText: 'Report Type',
+                      prefixIcon: Icon(_reportTypes[_selectedType]),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                      filled: true,
+                    ),
+                    items: _reportTypes.keys.map((type) {
+                      return DropdownMenuItem(
+                        value: type,
+                        child: Row(
+                          children: [
+                            Icon(_reportTypes[type], size: 20),
+                            const SizedBox(width: 10),
+                            Text(type),
+                          ],
+                        )
+                      );
+                    }).toList(),
+                    onChanged: (val) => setState(() => _selectedType = val!),
+                  ),
+                  const SizedBox(height: 20),
+
+                  TextFormField(
+                    controller: _titleController,
+                    decoration: InputDecoration(
+                      labelText: 'Title / Subject',
+                      hintText: 'e.g., Post-consultation Summary',
+                      prefixIcon: const Icon(Icons.title),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                      filled: true,
+                    ),
+                    validator: (val) => val == null || val.isEmpty ? 'Please enter a title' : null,
+                  ),
+                  const SizedBox(height: 20),
+
+                  TextFormField(
+                    controller: _contentController,
+                    decoration: InputDecoration(
+                      labelText: 'Clinical Notes',
+                      hintText: 'Detailed observations, prescriptions, or instructions...',
+                      alignLabelWithHint: true,
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                      filled: true,
+                    ),
+                    maxLines: 8,
+                    validator: (val) => val == null || val.isEmpty ? 'Please enter content' : null,
+                  ),
+                  const SizedBox(height: 32),
+
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      TextButton(
+                        onPressed: _isLoading ? null : () => Navigator.pop(context),
+                        child: const Text('Cancel'),
+                      ),
+                      const SizedBox(width: 12),
+                      ElevatedButton(
+                        onPressed: _isLoading ? null : _submit,
+                        style: ElevatedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 12),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        ),
+                        child: _isLoading
+                            ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                            : const Text('Create Record'),
+                      ),
+                    ],
+                  ),
+                ],
               ),
-              const SizedBox(height: 16),
-              TextFormField(
-                controller: _titleController,
-                decoration: const InputDecoration(
-                  labelText: 'Title',
-                  hintText: 'e.g., Blood Test Referral',
-                ),
-                validator: (val) => val == null || val.isEmpty ? 'Required' : null,
-              ),
-              const SizedBox(height: 16),
-              TextFormField(
-                controller: _contentController,
-                decoration: const InputDecoration(
-                  labelText: 'Content',
-                  hintText: 'Enter clinical notes or instructions here...',
-                ),
-                maxLines: 5,
-                validator: (val) => val == null || val.isEmpty ? 'Required' : null,
-              ),
-            ],
+            ),
           ),
         ),
       ),
-      actions: [
-        TextButton(
-          onPressed: _isLoading ? null : () => Navigator.pop(context),
-          child: const Text('Cancel'),
-        ),
-        ElevatedButton(
-          onPressed: _isLoading ? null : _submit,
-          child: _isLoading
-              ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
-              : const Text('Create'),
-        ),
-      ],
     );
   }
 }

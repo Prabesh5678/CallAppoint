@@ -7,6 +7,7 @@ import 'core/app_theme.dart';
 import 'core/router.dart';
 import 'core/globals.dart';
 import 'features/notifications/providers/notification_provider.dart';
+import 'shared/widgets/global_call_wrapper.dart';
 
 void main() async {
   runZonedGuarded(() async {
@@ -62,6 +63,9 @@ class CallAppointApp extends ConsumerWidget {
       darkTheme: AppTheme.dark,
       themeMode: themeMode,
       routerConfig: router,
+      builder: (context, child) {
+        return GlobalCallWrapper(child: child!);
+      },
     );
   }
 }

@@ -1,4 +1,5 @@
 from django.db import transaction
+from django.conf import settings
 from rest_framework import generics, status
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
@@ -49,6 +50,9 @@ def initiate_khalti_payment(request):
 
     fee = doctor.consultation_fee
     amount_paisa = int(fee * 100)
+
+    debug_return_url = settings.KHALTI_RETURN_URL
+    print(f"DEBUG: Initiating payment with return_url: {debug_return_url}")
 
     khalti_resp = khalti.initiate_payment(
         amount_paisa=amount_paisa,
