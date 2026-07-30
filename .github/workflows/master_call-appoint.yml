@@ -7,7 +7,7 @@ name: Build and deploy Python app to Azure Web App - call-appoint
 on:
   push:
     branches:
-      - master
+      - main
     paths:
       - 'server/**'
       - '.github/workflows/master_call-appoint.yml'  
