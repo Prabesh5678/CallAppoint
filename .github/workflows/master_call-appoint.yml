@@ -17,7 +17,7 @@ jobs:
   build:
     runs-on: ubuntu-latest
     permissions:
-      contents: read #This is required for actions/checkout
+      contents: read
 
     steps:
       - uses: actions/checkout@v4
@@ -75,15 +75,24 @@ jobs:
         with:
           name: python-app
 
-      - name: Show OIDC claims
+      - name: Show OIDC Claims
         uses: actions/github-script@v7
         with:
           script: |
-            const core = require('@actions/core');
             const token = await core.getIDToken('api://AzureADTokenExchange');
             const payload = JSON.parse(
               Buffer.from(token.split('.')[1], 'base64').toString()
             );
+
+            console.log("===== OIDC TOKEN CLAIMS =====");
+            console.log("Subject:", payload.sub);
+            console.log("Repository:", payload.repository);
+            console.log("Repository ID:", payload.repository_id);
+            console.log("Repository Owner:", payload.repository_owner);
+            console.log("Repository Owner ID:", payload.repository_owner_id);
+            console.log("Ref:", payload.ref);
+            console.log("Workflow Ref:", payload.job_workflow_ref);
+            console.log("=============================");
             console.log(JSON.stringify(payload, null, 2));
 
       - name: Login to Azure
