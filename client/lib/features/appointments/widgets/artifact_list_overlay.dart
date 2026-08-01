@@ -208,7 +208,7 @@ class ArtifactListOverlay extends ConsumerWidget {
       context: context,
       barrierDismissible: true,
       barrierLabel: 'Artifact Details',
-      pageBuilder: (context, _, __) => Center(
+      pageBuilder: (context, animation, secondaryAnimation) => Center(
         child: Container(
           margin: const EdgeInsets.all(32),
           padding: const EdgeInsets.all(24),

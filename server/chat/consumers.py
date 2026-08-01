@@ -81,10 +81,21 @@ class ChatConsumer(BaseConsumer):
         try:
             data = json.loads(text_data)
             message_text = data.get('message', '')
-            if not message_text:
+            file_url = data.get('file_url')
+            file_name = data.get('file_name')
+            message_type = data.get('message_type', 'text')
+
+            if not message_text and not file_url:
                 return
 
-            msg = await self._save_message(self.appointment_id, self.user['id'], message_text)
+            msg = await self._save_message(
+                self.appointment_id,
+                self.user['id'],
+                message_text,
+                file_url=file_url,
+                file_name=file_name,
+                message_type=message_type
+            )
 
             peer_id = await self._get_peer_id()
             if peer_id:
@@ -96,7 +107,7 @@ class ChatConsumer(BaseConsumer):
                             'type': 'new_chat_message',
                             'appointment_id': self.appointment_id,
                             'sender_name': self.user['full_name'],
-                            'message': message_text,
+                            'message': message_text or f"Sent a {message_type.upper()}",
                         }
                     }
                 )
@@ -107,6 +118,9 @@ class ChatConsumer(BaseConsumer):
                     'type': 'chat_message',
                     'id': msg['id'],
                     'message': message_text,
+                    'file_url': file_url,
+                    'file_name': file_name,
+                    'message_type': message_type,
                     'sender_id': str(self.user['id']),
                     'sent_at': msg['sent_at'],
                 }
@@ -118,15 +132,23 @@ class ChatConsumer(BaseConsumer):
         await self.send(text_data=json.dumps({
             'id': event['id'],
             'message': event['message'],
+            'file_url': event.get('file_url'),
+            'file_name': event.get('file_name'),
+            'message_type': event.get('message_type', 'text'),
             'sender_id': event['sender_id'],
             'sent_at': event['sent_at'],
         }))
 
     @database_sync_to_async
-    def _save_message(self, appointment_id, sender_id, message_text):
+    def _save_message(self, appointment_id, sender_id, message_text, file_url=None, file_name=None, message_type='text'):
         from .models import ChatMessage
         msg = ChatMessage.objects.create(
-            appointment_id=appointment_id, sender_id=sender_id, message=message_text
+            appointment_id=appointment_id,
+            sender_id=sender_id,
+            message=message_text,
+            file_url=file_url,
+            file_name=file_name,
+            message_type=message_type
         )
         return {'id': str(msg.id), 'sent_at': msg.sent_at.isoformat()}
 

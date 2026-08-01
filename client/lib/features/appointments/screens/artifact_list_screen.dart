@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+import '../../../shared/widgets/centered_constrained_box.dart';
+import '../../../shared/widgets/theme_toggle_button.dart';
 import '../providers/artifact_provider.dart';
 import '../models/artifact.dart';
 
@@ -30,6 +32,7 @@ class ArtifactListScreen extends ConsumerWidget {
             title: const Text('Clinical History'),
             centerTitle: false,
             actions: [
+              const ThemeToggleButton(),
               PopupMenuButton<String>(
                 icon: Icon(
                   Icons.filter_list,
@@ -98,13 +101,19 @@ class ArtifactListScreen extends ConsumerWidget {
                   )
                 : SliverPadding(
                     padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                    sliver: SliverList(
-                      delegate: SliverChildBuilderDelegate(
-                        (context, index) {
-                          final artifact = artifacts[index];
-                          return _buildArtifactCard(context, artifact);
-                        },
-                        childCount: artifacts.length,
+                    sliver: SliverToBoxAdapter(
+                      child: CenteredConstrainedBox(
+                        maxWidth: 900,
+                        child: ListView.builder(
+                          shrinkWrap: true,
+                          physics: const NeverScrollableScrollPhysics(),
+                          padding: EdgeInsets.zero,
+                          itemCount: artifacts.length,
+                          itemBuilder: (context, index) {
+                            final artifact = artifacts[index];
+                            return _buildArtifactCard(context, artifact);
+                          },
+                        ),
                       ),
                     ),
                   ),

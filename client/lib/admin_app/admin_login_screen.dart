@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../shared/widgets/theme_toggle_button.dart';
 import 'admin_dashboard_screen.dart';
 import 'admin_dio_client.dart';
 
@@ -52,10 +51,6 @@ class _AdminLoginScreenState extends ConsumerState<AdminLoginScreen> {
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
-        actions: [
-          const ThemeToggleButton(),
-          const SizedBox(width: 8),
-        ],
       ),
       body: Container(
         decoration: BoxDecoration(

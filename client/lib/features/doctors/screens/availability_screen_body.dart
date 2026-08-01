@@ -75,7 +75,7 @@ class _AvailabilityScreenBodyState
                     ),
                   ),
                   loading: () => const LinearProgressIndicator(),
-                  error: (_, __) => const SizedBox.shrink(),
+                  error: (error, stack) => const SizedBox.shrink(),
                 ),
                 const TabBar(
                   tabs: [

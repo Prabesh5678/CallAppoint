@@ -58,76 +58,86 @@ class AppointmentCard extends ConsumerWidget {
     final isActiveCall = ref.watch(activeCallIdProvider) == appointment.id;
 
     return Card(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+      elevation: 0,
+      margin: EdgeInsets.zero,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(20),
+        side: BorderSide(color: Theme.of(context).dividerColor.withOpacity(0.1)),
+      ),
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(20),
         child: Padding(
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.all(20),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // ... existing code ...
-              // (I'll use a larger block to match)
               Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  CircleAvatar(
+                    radius: 24,
+                    backgroundColor: Theme.of(context).colorScheme.primary.withOpacity(0.1),
+                    child: Icon(
+                      isDoctorView ? Icons.person : Icons.medical_services,
+                      color: Theme.of(context).colorScheme.primary,
+                    ),
+                  ),
+                  const SizedBox(width: 16),
                   Expanded(
-                    child: Text(
-                      otherPartyName,
-                      style: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
-                      ),
-                      overflow: TextOverflow.ellipsis,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          otherPartyName,
+                          style: const TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                            letterSpacing: -0.5,
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        const SizedBox(height: 4),
+                        Row(
+                          children: [
+                            Icon(Icons.access_time, size: 14, color: Theme.of(context).hintColor),
+                            const SizedBox(width: 4),
+                            Text(
+                              dateFmt.format(appointment.scheduledStart),
+                              style: TextStyle(
+                                color: Theme.of(context).hintColor,
+                                fontSize: 13,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
                     ),
                   ),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 10,
-                      vertical: 4,
-                    ),
-                    decoration: BoxDecoration(
-                      color: _statusColor(context).withOpacity(0.15),
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: Text(
-                      appointment.status.toUpperCase(),
-                      style: TextStyle(
-                        color: _statusColor(context),
-                        fontSize: 11,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ),
+                  _buildStatusBadge(context),
                 ],
-              ),
-              const SizedBox(height: 6),
-              Text(
-                dateFmt.format(appointment.scheduledStart),
-                style: TextStyle(color: Theme.of(context).hintColor),
               ),
 
               if (isOtherWaiting && appointment.status == 'confirmed' && !isActiveCall) ...[
-                const SizedBox(height: 12),
+                const SizedBox(height: 16),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                   decoration: BoxDecoration(
-                    color: Colors.green.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: Colors.green.withOpacity(0.3)),
+                    color: Colors.green.withOpacity(0.08),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: Colors.green.withOpacity(0.2)),
                   ),
                   child: Row(
                     children: [
-                      const PulseIndicator(),
+                      const PulseIndicator(size: 8),
                       const SizedBox(width: 12),
                       Expanded(
                         child: Text(
-                          '${isDoctorView ? "Patient" : "Doctor"} has joined and is waiting for you',
+                          '${isDoctorView ? "Patient" : "Doctor"} is waiting for you',
                           style: const TextStyle(
                             color: Colors.green,
-                            fontSize: 13,
-                            fontWeight: FontWeight.bold,
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
                           ),
                         ),
                       ),
@@ -138,68 +148,89 @@ class AppointmentCard extends ConsumerWidget {
 
               if (appointment.reasonForVisit != null &&
                   appointment.reasonForVisit!.isNotEmpty) ...[
-                const SizedBox(height: 6),
-                Text(
-                  appointment.reasonForVisit!,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
+                const SizedBox(height: 16),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.3),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Text(
+                    appointment.reasonForVisit!,
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
                 ),
               ],
+
               if (appointment.status == 'confirmed') ...[
-                const SizedBox(height: 12),
+                const SizedBox(height: 20),
                 Row(
                   children: [
                     Expanded(
                       child: OutlinedButton.icon(
-                        icon: const Icon(Icons.chat_bubble_outline, size: 18),
-                        label: const Text('Chat'),
+                        style: OutlinedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        ),
+                        icon: const Icon(Icons.chat_bubble_outline, size: 20),
+                        label: const Text('Message'),
                         onPressed: () =>
                             context.push('/chat/${appointment.id}'),
                       ),
                     ),
+                    const SizedBox(width: 12),
                     Expanded(
-                      child: Stack(
-                        alignment: Alignment.center,
-                        children: [
-                          GlowingEffect(
-                            isGlowing: isActiveCall,
-                            color: Colors.green,
-                            child: ElevatedButton.icon(
-                              icon: const Icon(Icons.videocam, size: 18),
-                              label: Text(isActiveCall ? 'Return to Call' : 'Join Call'),
-                              onPressed: () =>
-                                  context.push('/video/${appointment.id}'),
-                              style: isActiveCall ? ElevatedButton.styleFrom(
-                                backgroundColor: Colors.green,
-                                foregroundColor: Colors.white,
-                              ) : null,
-                            ),
+                      child: GlowingEffect(
+                        isGlowing: isActiveCall || isOtherWaiting,
+                        color: Colors.green,
+                        child: ElevatedButton.icon(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: isActiveCall ? Colors.green : null,
+                            foregroundColor: isActiveCall ? Colors.white : null,
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                           ),
-                          if (isOtherWaiting && !isActiveCall)
-                            Positioned(
-                              right: 8,
-                              top: 8,
-                              child: const PulseIndicator(),
-                            ),
-                        ],
+                          icon: Icon(
+                            isActiveCall ? Icons.call_received : Icons.videocam,
+                            size: 20,
+                          ),
+                          label: Text(isActiveCall ? 'Return' : 'Join Call'),
+                          onPressed: () =>
+                              context.push('/video/${appointment.id}'),
+                        ),
                       ),
                     ),
                   ],
                 ),
               ],
+
               if (isDoctorView && appointment.status == 'pending') ...[
-                const SizedBox(height: 12),
+                const SizedBox(height: 20),
                 Row(
                   children: [
                     Expanded(
                       child: OutlinedButton(
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: Theme.of(context).colorScheme.error,
+                          side: BorderSide(color: Theme.of(context).colorScheme.error.withOpacity(0.5)),
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                        ),
                         onPressed: onReject,
                         child: const Text('Reject'),
                       ),
                     ),
-                    const SizedBox(width: 8),
+                    const SizedBox(width: 12),
                     Expanded(
                       child: ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                        ),
                         onPressed: onConfirm,
                         child: const Text('Confirm'),
                       ),
@@ -207,24 +238,45 @@ class AppointmentCard extends ConsumerWidget {
                   ],
                 ),
               ],
+
               if (appointment.status == 'pending' ||
                   appointment.status == 'confirmed') ...[
                 if (!isDoctorView || appointment.status == 'confirmed') ...[
-                  const SizedBox(height: 8),
-                  Align(
-                    alignment: Alignment.centerRight,
+                  const SizedBox(height: 12),
+                  Center(
                     child: TextButton(
                       onPressed: onCancel,
-                      child: Text(
-                        'Cancel',
-                        style: TextStyle(color: Theme.of(context).colorScheme.error),
+                      style: TextButton.styleFrom(
+                        foregroundColor: Theme.of(context).colorScheme.error,
+                        minimumSize: const Size(double.infinity, 40),
                       ),
+                      child: const Text('Cancel Appointment'),
                     ),
                   ),
                 ],
               ],
             ],
           ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildStatusBadge(BuildContext context) {
+    final color = _statusColor(context);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.12),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Text(
+        appointment.status.toUpperCase(),
+        style: TextStyle(
+          color: color,
+          fontSize: 10,
+          fontWeight: FontWeight.w800,
+          letterSpacing: 0.5,
         ),
       ),
     );

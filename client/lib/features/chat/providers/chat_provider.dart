@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:typed_data';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 import '../../../core/dio_client.dart';
@@ -39,8 +40,48 @@ class ChatSocket {
     );
   }
 
-  void send(String message) {
-    _channel?.sink.add(jsonEncode({'message': message}));
+  void send(String message, {String? fileUrl, String? fileName, String type = 'text'}) {
+    _channel?.sink.add(jsonEncode({
+      'message': message,
+      'file_url': fileUrl,
+      'file_name': fileName,
+      'message_type': type,
+    }));
+  }
+
+  Future<String?> uploadFile(String appointmentId, List<int> bytes, String fileName, {required String doctorId, required String patientId}) async {
+    try {
+      // Ensure Supabase knows who has access to this appointment's reports
+      await supabase.from('appointment_access').upsert({
+        'appointment_id': appointmentId,
+        'doctor_id': doctorId,
+        'patient_id': patientId,
+      });
+
+      final ext = fileName.split('.').last.toLowerCase();
+      // Using a structure that matches the RLS policy: chat/appointment_id/filename
+      final path = 'chat/$appointmentId/${DateTime.now().millisecondsSinceEpoch}.$ext';
+
+      await supabase.storage.from('reports').uploadBinary(
+        path,
+        Uint8List.fromList(bytes),
+      );
+
+      return path; // Return the path, not the public URL
+    } catch (e) {
+      print('Upload error: $e');
+      return null;
+    }
+  }
+
+  Future<String> getSecureUrl(String path) async {
+    try {
+      final response = await supabase.storage.from('reports').createSignedUrl(path, 3600);
+      return response;
+    } catch (e) {
+      print('Error getting signed URL: $e');
+      return '';
+    }
   }
 
   void dispose() {

@@ -173,7 +173,9 @@ class _EditBlogScreenState extends ConsumerState<EditBlogScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     final isMobile = MediaQuery.of(context).size.width < 640;
+    final textColor = theme.colorScheme.onSurface;
 
     return Stack(
       children: [
@@ -197,9 +199,9 @@ class _EditBlogScreenState extends ConsumerState<EditBlogScreen> {
                   child: Container(
                     height: isMobile ? 180 : 220,
                     decoration: BoxDecoration(
-                      color: const Color(0xFF151515),
+                      color: theme.cardColor,
                       borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: const Color(0xFF272727)),
+                      border: Border.all(color: theme.dividerColor),
                       image: _imageFile != null
                           ? (kIsWeb
                               ? (_webImageBytes != null
@@ -217,9 +219,9 @@ class _EditBlogScreenState extends ConsumerState<EditBlogScreen> {
                         ? Column(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
-                              Icon(Icons.add_a_photo, size: isMobile ? 40 : 50, color: Colors.grey),
+                              Icon(Icons.add_a_photo, size: isMobile ? 40 : 50, color: theme.colorScheme.onSurface.withOpacity(0.4)),
                               const SizedBox(height: 8),
-                              const Text('Pick Thumbnail', style: TextStyle(color: Colors.grey)),
+                              Text('Pick Thumbnail', style: TextStyle(color: theme.colorScheme.onSurface.withOpacity(0.4))),
                             ],
                           )
                         : null,
@@ -228,11 +230,10 @@ class _EditBlogScreenState extends ConsumerState<EditBlogScreen> {
                 const SizedBox(height: 24),
                 DropdownButtonFormField<String>(
                   value: _category,
-                  dropdownColor: const Color(0xFF151515),
-                  style: const TextStyle(color: Colors.white),
+                  dropdownColor: theme.cardColor,
+                  style: TextStyle(color: textColor),
                   decoration: const InputDecoration(
                     labelText: 'Category',
-                    border: OutlineInputBorder(),
                   ),
                   items: _categories.map((cat) {
                     return DropdownMenuItem(value: cat, child: Text(cat));
@@ -247,11 +248,10 @@ class _EditBlogScreenState extends ConsumerState<EditBlogScreen> {
                 TextFormField(
                   controller: _titleController,
                   enabled: _saveStage == _SaveStage.none,
-                  style: const TextStyle(color: Colors.white),
+                  style: TextStyle(color: textColor),
                   decoration: const InputDecoration(
                     labelText: 'Title',
                     hintText: 'Enter a catchy title',
-                    border: OutlineInputBorder(),
                     counterText: '',
                   ),
                   maxLength: 200,
@@ -265,11 +265,10 @@ class _EditBlogScreenState extends ConsumerState<EditBlogScreen> {
                 TextFormField(
                   controller: _contentController,
                   enabled: _saveStage == _SaveStage.none,
-                  style: const TextStyle(color: Colors.white),
+                  style: TextStyle(color: textColor),
                   decoration: const InputDecoration(
                     labelText: 'Content',
                     hintText: 'Share your medical knowledge...',
-                    border: OutlineInputBorder(),
                     alignLabelWithHint: true,
                   ),
                   maxLines: 10,
@@ -303,6 +302,7 @@ class _LoadingOverlay extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     final title = stage == _SaveStage.processing ? 'Processing Image...' : 'Saving Blog...';
     final subtitle = stage == _SaveStage.processing
         ? 'Optimizing and compressing thumbnail'
@@ -315,7 +315,7 @@ class _LoadingOverlay extends StatelessWidget {
           margin: const EdgeInsets.all(32),
           padding: const EdgeInsets.all(24),
           decoration: BoxDecoration(
-            color: const Color(0xFF151515),
+            color: theme.cardColor,
             borderRadius: BorderRadius.circular(16),
             boxShadow: [
               BoxShadow(color: Colors.black.withOpacity(0.5), blurRadius: 10),
@@ -324,21 +324,21 @@ class _LoadingOverlay extends StatelessWidget {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const CircularProgressIndicator(color: Color(0xFFE8433D)),
+              CircularProgressIndicator(color: theme.colorScheme.primary),
               const SizedBox(height: 24),
               Text(
                 title,
                 style: GoogleFonts.poppins(
                   fontSize: 18,
                   fontWeight: FontWeight.bold,
-                  color: Colors.white,
+                  color: theme.colorScheme.onSurface,
                 ),
               ),
               const SizedBox(height: 8),
               Text(
                 subtitle,
                 textAlign: TextAlign.center,
-                style: GoogleFonts.inter(color: Colors.white70),
+                style: GoogleFonts.inter(color: theme.colorScheme.onSurface.withOpacity(0.7)),
               ),
               if (onCancel != null) ...[
                 const SizedBox(height: 24),
@@ -346,7 +346,7 @@ class _LoadingOverlay extends StatelessWidget {
                   onPressed: onCancel,
                   child: Text(
                     'Cancel',
-                    style: TextStyle(color: Colors.grey[400]),
+                    style: TextStyle(color: theme.colorScheme.onSurface.withOpacity(0.5)),
                   ),
                 ),
               ],

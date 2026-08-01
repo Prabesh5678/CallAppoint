@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:dio/dio.dart';
 import '../../../../core/dio_client.dart';
 
 class CreateArtifactDialog extends StatefulWidget {

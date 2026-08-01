@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../shared/widgets/centered_constrained_box.dart';
+import '../../../shared/widgets/theme_toggle_button.dart';
 import '../providers/doctor_provider.dart';
 import '../providers/doctor_application_provider.dart';
 
@@ -72,7 +74,13 @@ Widget build(BuildContext context) {
   final statusAsync = ref.watch(applicationStatusProvider);
 
   return Scaffold(
-    appBar: AppBar(title: const Text('Become a Doctor')),
+    appBar: AppBar(
+      title: const Text('Become a Doctor'),
+      actions: const [
+        ThemeToggleButton(),
+        SizedBox(width: 8),
+      ],
+    ),
     body: statusAsync.when(
       loading: () => const Center(child: CircularProgressIndicator()),
       error: (e, _) => Center(child: Text('Error: $e')),
@@ -91,11 +99,13 @@ Widget build(BuildContext context) {
 
         final wasRejected = status != null && status['verification_status'] == 'rejected';
 
-        return SingleChildScrollView(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
+        return CenteredConstrainedBox(
+          maxWidth: 700,
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
               if (wasRejected) ...[
                 Container(
                   padding: const EdgeInsets.all(16),
@@ -183,8 +193,9 @@ Widget build(BuildContext context) {
               ),
             ],
           ),
-        );
-      },
+        ),
+      );
+    },
     ),
   );
 }

@@ -1,0 +1,6 @@
+- Modernized UI with refined Teal theme, Poppins typography, and responsive layouts across all screens.
+- Redesigned Appointment and Doctor cards for a cleaner, consistent visual experience.
+- Implemented a responsive collapsible sidebar and centralized global Dark/Light mode theme toggle.
+- Integrated secure medical report sharing (PDF/Image) with private storage and RLS protection.
+- Enhanced Chat with a "Media & Reports" attachment section and file selection preview.
+- Upgraded Blog with theme support and high-resolution image viewer featuring zoom/pan controls.

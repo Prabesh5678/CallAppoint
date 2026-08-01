@@ -34,9 +34,15 @@ class _BlogPostRowState extends State<BlogPostRow> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
     final isMobile = MediaQuery.of(context).size.width < 640;
+
     final categoryColor = _getCategoryColor(widget.blog.category);
-    const accentRed = Color(0xFFE8433D);
+    final accentRed = theme.colorScheme.primary;
+
+    final textColor = theme.colorScheme.onSurface;
+    final subTextColor = theme.colorScheme.onSurface.withOpacity(0.6);
 
     Widget content = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -45,7 +51,7 @@ class _BlogPostRowState extends State<BlogPostRow> {
           '— ${DateFormat('MMM dd, yyyy').format(widget.blog.createdAt)}',
           style: GoogleFonts.inter(
             fontSize: isMobile ? 12 : 13,
-            color: const Color(0xFF7A7A7A),
+            color: subTextColor,
             letterSpacing: 0.3,
           ),
         ),
@@ -56,7 +62,7 @@ class _BlogPostRowState extends State<BlogPostRow> {
             fontSize: isMobile ? 20 : 21,
             fontWeight: FontWeight.w600,
             height: 1.35,
-            color: categoryColor,
+            color: categoryColor == const Color(0xFFECECEC) ? textColor : categoryColor,
             decoration: _isHovered ? TextDecoration.underline : null,
           ),
         ),
@@ -69,14 +75,14 @@ class _BlogPostRowState extends State<BlogPostRow> {
                 backgroundImage: CachedNetworkImageProvider(widget.blog.doctorAvatarUrl!),
               )
             else
-              Icon(Icons.person, size: isMobile ? 18 : 16, color: const Color(0xFF7A7A7A)),
+              Icon(Icons.person, size: isMobile ? 18 : 16, color: subTextColor),
             const SizedBox(width: 8),
             Text(
               widget.blog.displayDoctorName,
               style: GoogleFonts.inter(
                 fontSize: isMobile ? 14 : 13,
                 fontWeight: FontWeight.w500,
-                color: const Color(0xFFECECEC),
+                color: textColor,
               ),
             ),
           ],
@@ -89,7 +95,7 @@ class _BlogPostRowState extends State<BlogPostRow> {
           style: GoogleFonts.inter(
             fontSize: isMobile ? 14 : 15,
             height: 1.7,
-            color: const Color(0xFF9A9A9A),
+            color: subTextColor,
           ),
         ),
       ],
@@ -102,7 +108,7 @@ class _BlogPostRowState extends State<BlogPostRow> {
         aspectRatio: isMobile ? 16 / 9 : 4 / 3,
         child: Container(
           decoration: BoxDecoration(
-            color: const Color(0xFF1A1A1A),
+            color: isDark ? Colors.black26 : Colors.black12,
             borderRadius: BorderRadius.circular(4),
           ),
           clipBehavior: Clip.antiAlias,
@@ -117,22 +123,22 @@ class _BlogPostRowState extends State<BlogPostRow> {
                     ? CachedNetworkImage(
                         imageUrl: widget.blog.thumbnailUrl!,
                         fit: BoxFit.cover,
-                        placeholder: (context, url) => Container(color: const Color(0xFF1A1A1A)),
-                        errorWidget: (context, url, error) => Container(color: const Color(0xFF1A1A1A)),
+                        placeholder: (context, url) => Container(color: Colors.transparent),
+                        errorWidget: (context, url, error) => Container(color: Colors.transparent),
                       )
-                    : Container(color: const Color(0xFF1A1A1A)),
+                    : Container(color: Colors.transparent),
               ),
               // Scrim
               Container(
-                decoration: const BoxDecoration(
+                decoration: BoxDecoration(
                   gradient: LinearGradient(
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
                     colors: [
-                      Colors.black87,
+                      Colors.black.withOpacity(0.7),
                       Colors.transparent,
                     ],
-                    stops: [0.35, 1.0],
+                    stops: const [0.35, 1.0],
                   ),
                 ),
               ),
@@ -153,7 +159,7 @@ class _BlogPostRowState extends State<BlogPostRow> {
                   ),
                 ),
               ),
-              // Red Bar
+              // Color Bar
               Positioned(
                 right: 0,
                 top: 0,

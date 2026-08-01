@@ -9,7 +9,9 @@ class ChatMessage(models.Model):
                                      db_column='appointment_id', related_name='chat_messages')
     sender = models.ForeignKey(User, on_delete=models.CASCADE, db_column='sender_id')
     message = models.TextField(null=True, blank=True)
-    attachment_url = models.TextField(null=True, blank=True)
+    file_url = models.TextField(null=True, blank=True, db_column='attachment_url')
+    file_name = models.TextField(null=True, blank=True)
+    message_type = models.CharField(max_length=20, default='text')
     sent_at = models.DateTimeField(auto_now_add=True)
     is_read = models.BooleanField(default=False)
 

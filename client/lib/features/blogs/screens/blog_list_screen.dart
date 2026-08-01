@@ -2,9 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
+import '../../../shared/widgets/centered_constrained_box.dart';
 import '../providers/blog_provider.dart';
 import '../../auth/providers/auth_provider.dart';
 import 'widgets/blog_post_row.dart';
+
+import '../../../../core/theme_provider.dart';
 
 class BlogListScreen extends ConsumerWidget {
   const BlogListScreen({super.key});
@@ -13,25 +16,32 @@ class BlogListScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final blogsAsync = ref.watch(filteredBlogsProvider);
     final userProfileAsync = ref.watch(currentUserProfileProvider);
+    final themeMode = ref.watch(themeModeProvider);
+
     final isDoctor = userProfileAsync.maybeWhen(
       data: (profile) => profile['role'] == 'doctor',
       orElse: () => false,
     );
 
+    final theme = Theme.of(context);
     final screenWidth = MediaQuery.of(context).size.width;
     final isMobile = screenWidth < 640;
     final horizontalPadding = isMobile ? 16.0 : 24.0;
 
-    const bgColor = Color(0xFF0D0D0D);
-    const accentRed = Color(0xFFE8433D);
+    final bgColor = theme.scaffoldBackgroundColor;
+    final accentRed = theme.colorScheme.primary; // Using primary color from theme
+    final textColor = theme.colorScheme.onSurface;
+    final subTextColor = theme.colorScheme.onSurface.withOpacity(0.7);
 
     return Scaffold(
       backgroundColor: bgColor,
       body: SafeArea(
         child: RefreshIndicator(
           onRefresh: () async => ref.refresh(allBlogsProvider),
-          child: CustomScrollView(
-            slivers: [
+          child: CenteredConstrainedBox(
+            maxWidth: 1000,
+            child: CustomScrollView(
+              slivers: [
               SliverToBoxAdapter(
                 child: Padding(
                   padding: EdgeInsets.fromLTRB(
@@ -52,7 +62,7 @@ class BlogListScreen extends ConsumerWidget {
                                 style: GoogleFonts.poppins(
                                   fontSize: isMobile ? 28 : 36,
                                   fontWeight: FontWeight.w700,
-                                  color: const Color(0xFFECECEC),
+                                  color: textColor,
                                   letterSpacing: 0.5,
                                 ),
                                 children: [
@@ -67,11 +77,21 @@ class BlogListScreen extends ConsumerWidget {
                           ),
                           Row(
                             children: [
+                              IconButton(
+                                icon: Icon(
+                                  themeMode == ThemeMode.dark
+                                      ? Icons.light_mode
+                                      : Icons.dark_mode,
+                                  color: textColor.withOpacity(0.7),
+                                ),
+                                onPressed: () =>
+                                    ref.read(themeModeProvider.notifier).toggle(),
+                              ),
                               _FilterButton(isDoctor: isDoctor),
                               if (isDoctor)
                                 IconButton(
                                   onPressed: () => context.push('/blogs/new'),
-                                  icon: const Icon(Icons.add, color: Colors.white),
+                                  icon: Icon(Icons.add, color: textColor),
                                 ),
                             ],
                           )
@@ -80,14 +100,14 @@ class BlogListScreen extends ConsumerWidget {
                       const SizedBox(height: 14),
                       Container(
                         height: 2,
-                        decoration: const BoxDecoration(
+                        decoration: BoxDecoration(
                           gradient: LinearGradient(
                             colors: [
                               accentRed,
-                              Color(0xFF4A1A18),
+                              accentRed.withOpacity(0.3),
                               Colors.transparent,
                             ],
-                            stops: [0.0, 0.6, 1.0],
+                            stops: const [0.0, 0.6, 1.0],
                           ),
                         ),
                       ),
@@ -98,11 +118,11 @@ class BlogListScreen extends ConsumerWidget {
               blogsAsync.when(
                 data: (blogs) {
                   if (blogs.isEmpty) {
-                    return const SliverFillRemaining(
+                    return SliverFillRemaining(
                       child: Center(
                         child: Text(
                           'No blogs found',
-                          style: TextStyle(color: Colors.white70),
+                          style: TextStyle(color: subTextColor),
                         ),
                       ),
                     );
@@ -121,10 +141,10 @@ class BlogListScreen extends ConsumerWidget {
                                 onTap: () => context.push('/blogs/${blog.id}'),
                               ),
                               if (!isLast)
-                                const Divider(
+                                Divider(
                                   height: 1,
                                   thickness: 1,
-                                  color: Color(0xFF272727),
+                                  color: theme.dividerColor,
                                 ),
                             ],
                           );
@@ -141,7 +161,7 @@ class BlogListScreen extends ConsumerWidget {
                   child: Center(
                     child: Text(
                       'Error: $e',
-                      style: const TextStyle(color: Colors.white70),
+                      style: TextStyle(color: subTextColor),
                     ),
                   ),
                 ),
@@ -150,6 +170,7 @@ class BlogListScreen extends ConsumerWidget {
           ),
         ),
       ),
+    ),
       floatingActionButton: isDoctor
           ? FloatingActionButton(
               heroTag: 'blog_list_fab',
@@ -169,9 +190,12 @@ class _FilterButton extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final theme = Theme.of(context);
+    final textColor = theme.colorScheme.onSurface;
+
     return PopupMenuButton<String>(
-      icon: const Icon(Icons.filter_list, color: Colors.white70),
-      color: const Color(0xFF151515),
+      icon: Icon(Icons.filter_list, color: textColor.withOpacity(0.7)),
+      color: theme.cardColor,
       onSelected: (value) {
         if (isDoctor) {
           ref.read(showOnlyMyOwnBlogsProvider.notifier).state =
@@ -189,9 +213,9 @@ class _FilterButton extends ConsumerWidget {
               value: 'all',
               child: Row(
                 children: [
-                  if (!onlyMyBlogs) const Icon(Icons.check, size: 18, color: Colors.white),
+                  if (!onlyMyBlogs) Icon(Icons.check, size: 18, color: textColor),
                   const SizedBox(width: 8),
-                  const Text('All Blogs', style: TextStyle(color: Colors.white)),
+                  Text('All Blogs', style: TextStyle(color: textColor)),
                 ],
               ),
             ),
@@ -199,9 +223,9 @@ class _FilterButton extends ConsumerWidget {
               value: 'my_blogs',
               child: Row(
                 children: [
-                  if (onlyMyBlogs) const Icon(Icons.check, size: 18, color: Colors.white),
+                  if (onlyMyBlogs) Icon(Icons.check, size: 18, color: textColor),
                   const SizedBox(width: 8),
-                  const Text('My Blogs', style: TextStyle(color: Colors.white)),
+                  Text('My Blogs', style: TextStyle(color: textColor)),
                 ],
               ),
             ),
@@ -213,9 +237,9 @@ class _FilterButton extends ConsumerWidget {
               value: 'all',
               child: Row(
                 children: [
-                  if (!onlyMyDoctors) const Icon(Icons.check, size: 18, color: Colors.white),
+                  if (!onlyMyDoctors) Icon(Icons.check, size: 18, color: textColor),
                   const SizedBox(width: 8),
-                  const Text('All Blogs', style: TextStyle(color: Colors.white)),
+                  Text('All Blogs', style: TextStyle(color: textColor)),
                 ],
               ),
             ),
@@ -223,9 +247,9 @@ class _FilterButton extends ConsumerWidget {
               value: 'my_doctors',
               child: Row(
                 children: [
-                  if (onlyMyDoctors) const Icon(Icons.check, size: 18, color: Colors.white),
+                  if (onlyMyDoctors) Icon(Icons.check, size: 18, color: textColor),
                   const SizedBox(width: 8),
-                  const Text("My Doctors' Blogs", style: TextStyle(color: Colors.white)),
+                  Text("My Doctors' Blogs", style: TextStyle(color: textColor)),
                 ],
               ),
             ),

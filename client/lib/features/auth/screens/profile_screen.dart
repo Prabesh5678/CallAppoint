@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../../shared/widgets/theme_toggle_button.dart';
+import '../../../shared/widgets/centered_constrained_box.dart';
 import '../../../shared/widgets/logout_button.dart';
 import '../../../core/dio_client.dart';
 import '../../doctors/providers/doctor_provider.dart';
 import '../providers/auth_provider.dart';
 import 'package:intl/intl.dart';
+import 'package:go_router/go_router.dart';
 
 class ProfileScreen extends ConsumerStatefulWidget {
   const ProfileScreen({super.key});
@@ -145,9 +146,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Profile'),
-        actions: [
-          const ThemeToggleButton(),
-          const LogoutButton(),
+        actions: const [
+          LogoutButton(),
         ],
       ),
       body: profileAsync.when(
@@ -156,240 +156,274 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
         data: (profile) {
           final isDoctor = profile['role'] == 'doctor';
 
-          return Form(
-            key: _formKey,
-            child: ListView(
-              padding: const EdgeInsets.all(16),
-              children: [
-                Center(
-                  child: Stack(
-                    children: [
-                      CircleAvatar(
-                        radius: 50,
-                        backgroundImage: (_avatarUrlController.text.trim().isNotEmpty)
-                            ? NetworkImage(_avatarUrlController.text.trim())
-                            : null,
-                        child: (_avatarUrlController.text.trim().isEmpty)
-                            ? const Icon(Icons.person, size: 50)
-                            : null,
-                      ),
-                      Positioned(
-                        bottom: 0,
-                        right: 0,
-                        child: CircleAvatar(
-                          backgroundColor: Theme.of(context).primaryColor,
-                          radius: 18,
-                          child: IconButton(
-                            icon: const Icon(Icons.edit, size: 18, color: Colors.white),
-                            onPressed: () {
-                              _showAvatarUrlDialog();
-                            },
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 24),
-                TextFormField(
-                  controller: _nameController,
-                  decoration: const InputDecoration(
-                    labelText: 'Full Name',
-                    border: OutlineInputBorder(),
-                    prefixIcon: Icon(Icons.person_outline),
-                  ),
-                  validator: (value) =>
-                      value == null || value.isEmpty ? 'Required' : null,
-                ),
-                const SizedBox(height: 16),
-                TextFormField(
-                  controller: _phoneController,
-                  decoration: const InputDecoration(
-                    labelText: 'Phone Number',
-                    border: OutlineInputBorder(),
-                    prefixIcon: Icon(Icons.phone_outlined),
-                  ),
-                  keyboardType: TextInputType.phone,
-                  validator: (value) {
-                    if (value == null || value.isEmpty) return null; // Optional
-                    final trimmed = value.trim();
-                    if (trimmed.length != 10 || !RegExp(r'^[0-9]+$').hasMatch(trimmed)) {
-                      return 'Must be exactly 10 digits';
-                    }
-                    return null;
-                  },
-                ),
-                const SizedBox(height: 16),
-                Row(
-                  children: [
-                    Expanded(
-                      child: DropdownButtonFormField<String>(
-                        value: _gender,
-                        decoration: const InputDecoration(
-                          labelText: 'Gender',
-                          border: OutlineInputBorder(),
-                        ),
-                        items: ['Male', 'Female', 'Other']
-                            .map((g) => DropdownMenuItem(value: g, child: Text(g)))
-                            .toList(),
-                        onChanged: (val) => setState(() => _gender = val),
-                        validator: (value) =>
-                            value == null || value.isEmpty ? 'Required' : null,
-                      ),
-                    ),
-                    const SizedBox(width: 16),
-                    Expanded(
-                      child: InkWell(
-                        onTap: () async {
-                          final picked = await showDatePicker(
-                            context: context,
-                            initialDate: _dob ?? DateTime(1990),
-                            firstDate: DateTime(1900),
-                            lastDate: DateTime.now(),
-                          );
-                          if (picked != null) setState(() => _dob = picked);
-                        },
-                        child: InputDecorator(
-                          decoration: const InputDecoration(
-                            labelText: 'Birth Date',
-                            border: OutlineInputBorder(),
-                          ),
-                          child: Text(_dob == null
-                              ? 'Select'
-                              : DateFormat('yyyy-MM-dd').format(_dob!)),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                if (isDoctor) ...[
-                  const Padding(
-                    padding: EdgeInsets.symmetric(vertical: 24),
-                    child: Divider(),
-                  ),
-                  Text('Professional Details',
-                      style: Theme.of(context).textTheme.titleLarge),
-                  if (_verificationStatus != null) ...[
-                    const SizedBox(height: 8),
-                    Row(
+          return CenteredConstrainedBox(
+            maxWidth: 700,
+            child: Form(
+              key: _formKey,
+              child: ListView(
+                padding: const EdgeInsets.all(16),
+                children: [
+                  Center(
+                    child: Stack(
                       children: [
-                        const Text('Status: ', style: TextStyle(fontWeight: FontWeight.bold)),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                          decoration: BoxDecoration(
-                            color: _verificationStatus == 'approved' ? Colors.green : (_verificationStatus == 'rejected' ? Colors.red : Colors.orange),
-                            borderRadius: BorderRadius.circular(4),
+                        CircleAvatar(
+                          radius: 50,
+                          backgroundImage:
+                              (_avatarUrlController.text.trim().isNotEmpty)
+                                  ? NetworkImage(
+                                      _avatarUrlController.text.trim())
+                                  : null,
+                          child: (_avatarUrlController.text.trim().isEmpty)
+                              ? const Icon(Icons.person, size: 50)
+                              : null,
+                        ),
+                        Positioned(
+                          bottom: 0,
+                          right: 0,
+                          child: CircleAvatar(
+                            backgroundColor: Theme.of(context).primaryColor,
+                            radius: 18,
+                            child: IconButton(
+                              icon: const Icon(Icons.edit,
+                                  size: 18, color: Colors.white),
+                              onPressed: () {
+                                _showAvatarUrlDialog();
+                              },
+                            ),
                           ),
-                          child: Text(_verificationStatus!.toUpperCase(), style: const TextStyle(color: Colors.white, fontSize: 12)),
                         ),
                       ],
                     ),
-                  ],
-                  const SizedBox(height: 16),
+                  ),
+                  const SizedBox(height: 24),
                   TextFormField(
-                    controller: _licenseController,
+                    controller: _nameController,
                     decoration: const InputDecoration(
-                      labelText: 'License Number',
+                      labelText: 'Full Name',
                       border: OutlineInputBorder(),
-                      prefixIcon: Icon(Icons.badge_outlined),
+                      prefixIcon: Icon(Icons.person_outline),
                     ),
                     validator: (value) =>
                         value == null || value.isEmpty ? 'Required' : null,
                   ),
                   const SizedBox(height: 16),
                   TextFormField(
-                    controller: _bioController,
-                    maxLines: 3,
+                    controller: _phoneController,
                     decoration: const InputDecoration(
-                      labelText: 'Bio',
+                      labelText: 'Phone Number',
                       border: OutlineInputBorder(),
-                      alignLabelWithHint: true,
+                      prefixIcon: Icon(Icons.phone_outlined),
                     ),
+                    keyboardType: TextInputType.phone,
+                    validator: (value) {
+                      if (value == null || value.isEmpty) {
+                        return null; // Optional
+                      }
+                      final trimmed = value.trim();
+                      if (trimmed.length != 10 ||
+                          !RegExp(r'^[0-9]+$').hasMatch(trimmed)) {
+                        return 'Must be exactly 10 digits';
+                      }
+                      return null;
+                    },
                   ),
                   const SizedBox(height: 16),
                   Row(
                     children: [
                       Expanded(
-                        child: TextFormField(
-                          controller: _experienceController,
-                          keyboardType: TextInputType.number,
+                        child: DropdownButtonFormField<String>(
+                          value: _gender,
                           decoration: const InputDecoration(
-                            labelText: 'Experience (Years)',
+                            labelText: 'Gender',
                             border: OutlineInputBorder(),
                           ),
+                          items: ['Male', 'Female', 'Other']
+                              .map((g) =>
+                                  DropdownMenuItem(value: g, child: Text(g)))
+                              .toList(),
+                          onChanged: (val) => setState(() => _gender = val),
                           validator: (value) {
-                            if (value == null || value.isEmpty) return 'Required';
-                            final n = int.tryParse(value);
-                            if (n == null) return 'Invalid number';
-                            if (n < 0) return 'Cannot be negative';
+                            if (value == null || value.isEmpty) {
+                              return 'Required';
+                            }
                             return null;
                           },
                         ),
                       ),
                       const SizedBox(width: 16),
                       Expanded(
-                        child: TextFormField(
-                          controller: _feeController,
-                          keyboardType: TextInputType.number,
-                          decoration: const InputDecoration(
-                            labelText: 'Consultation Fee',
-                            prefixText: '\$ ',
-                            border: OutlineInputBorder(),
-                          ),
-                          validator: (value) {
-                            if (value == null || value.isEmpty) return 'Required';
-                            final n = double.tryParse(value);
-                            if (n == null) return 'Invalid number';
-                            if (n < 0) return 'Cannot be negative';
-                            return null;
+                        child: InkWell(
+                          onTap: () async {
+                            final picked = await showDatePicker(
+                              context: context,
+                              initialDate: _dob ?? DateTime(1990),
+                              firstDate: DateTime(1900),
+                              lastDate: DateTime.now(),
+                            );
+                            if (picked != null) setState(() => _dob = picked);
                           },
+                          child: InputDecorator(
+                            decoration: const InputDecoration(
+                              labelText: 'Birth Date',
+                              border: OutlineInputBorder(),
+                            ),
+                            child: Text(_dob == null
+                                ? 'Select'
+                                : DateFormat('yyyy-MM-dd').format(_dob!)),
+                          ),
                         ),
                       ),
                     ],
                   ),
-                  const SizedBox(height: 24),
-                  Text('Specialties',
-                      style: Theme.of(context).textTheme.titleMedium),
-                  const SizedBox(height: 8),
-                  specialtiesAsync.when(
-                    data: (specialties) => Wrap(
-                      spacing: 8,
-                      children: specialties.map((s) {
-                        final isSelected = _selectedSpecialtyIds.contains(s.id);
-                        return FilterChip(
-                          label: Text(s.name),
-                          selected: isSelected,
-                          onSelected: (selected) {
-                            setState(() {
-                              if (selected) {
-                                _selectedSpecialtyIds.add(s.id);
-                              } else {
-                                _selectedSpecialtyIds.remove(s.id);
+                  if (isDoctor) ...[
+                    const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 24),
+                      child: Divider(),
+                    ),
+                    Text('Professional Details',
+                        style: Theme.of(context).textTheme.titleLarge),
+                    if (_verificationStatus != null) ...[
+                      const SizedBox(height: 8),
+                      Row(
+                        children: [
+                          const Text('Status: ',
+                              style: TextStyle(fontWeight: FontWeight.bold)),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 8, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: _verificationStatus == 'approved'
+                                  ? Colors.green
+                                  : (_verificationStatus == 'rejected'
+                                      ? Colors.red
+                                      : Colors.orange),
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                            child: Text(_verificationStatus!.toUpperCase(),
+                                style: const TextStyle(
+                                    color: Colors.white, fontSize: 12)),
+                          ),
+                        ],
+                      ),
+                    ],
+                    const SizedBox(height: 16),
+                    TextFormField(
+                      controller: _licenseController,
+                      decoration: const InputDecoration(
+                        labelText: 'License Number',
+                        border: OutlineInputBorder(),
+                        prefixIcon: Icon(Icons.badge_outlined),
+                      ),
+                      validator: (value) =>
+                          value == null || value.isEmpty ? 'Required' : null,
+                    ),
+                    const SizedBox(height: 16),
+                    TextFormField(
+                      controller: _bioController,
+                      maxLines: 3,
+                      decoration: const InputDecoration(
+                        labelText: 'Bio',
+                        border: OutlineInputBorder(),
+                        alignLabelWithHint: true,
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: TextFormField(
+                            controller: _experienceController,
+                            keyboardType: TextInputType.number,
+                            decoration: const InputDecoration(
+                              labelText: 'Experience (Years)',
+                              border: OutlineInputBorder(),
+                            ),
+                            validator: (value) {
+                              if (value == null || value.isEmpty) {
+                                return 'Required';
                               }
-                            });
-                          },
-                        );
-                      }).toList(),
+                              final n = int.tryParse(value);
+                              if (n == null) return 'Invalid number';
+                              if (n < 0) return 'Cannot be negative';
+                              return null;
+                            },
+                          ),
+                        ),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: TextFormField(
+                            controller: _feeController,
+                            keyboardType: TextInputType.number,
+                            decoration: const InputDecoration(
+                              labelText: 'Consultation Fee',
+                              prefixText: '\$ ',
+                              border: OutlineInputBorder(),
+                            ),
+                            validator: (value) {
+                              if (value == null || value.isEmpty) {
+                                return 'Required';
+                              }
+                              final n = double.tryParse(value);
+                              if (n == null) return 'Invalid number';
+                              if (n < 0) return 'Cannot be negative';
+                              return null;
+                            },
+                          ),
+                        ),
+                      ],
                     ),
-                    loading: () => const LinearProgressIndicator(),
-                    error: (e, _) => Text('Error: $e'),
+                    const SizedBox(height: 24),
+                    Text('Specialties',
+                        style: Theme.of(context).textTheme.titleMedium),
+                    const SizedBox(height: 8),
+                    specialtiesAsync.when(
+                      data: (specialties) => Wrap(
+                        spacing: 8,
+                        children: specialties.map((s) {
+                          final isSelected =
+                              _selectedSpecialtyIds.contains(s.id);
+                          return FilterChip(
+                            label: Text(s.name),
+                            selected: isSelected,
+                            onSelected: (selected) {
+                              setState(() {
+                                if (selected) {
+                                  _selectedSpecialtyIds.add(s.id);
+                                } else {
+                                  _selectedSpecialtyIds.remove(s.id);
+                                }
+                              });
+                            },
+                          );
+                        }).toList(),
+                      ),
+                      loading: () => const LinearProgressIndicator(),
+                      error: (e, _) => Text('Error: $e'),
+                    ),
+                  ],
+                  const SizedBox(height: 24),
+                  ListTile(
+                    leading: const Icon(Icons.info_outline),
+                    title: const Text('About CallAppoint'),
+                    trailing: const Icon(Icons.chevron_right),
+                    onTap: () => context.push('/about'),
                   ),
+                  const SizedBox(height: 32),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton(
+                      onPressed: _isLoading ? null : _saveProfile,
+                      style: ElevatedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                      ),
+                      child: _isLoading
+                          ? const CircularProgressIndicator()
+                          : const Text('Save Changes'),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
                 ],
-                const SizedBox(height: 32),
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton(
-                    onPressed: _isLoading ? null : _saveProfile,
-                    style: ElevatedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                    ),
-                    child: _isLoading
-                        ? const CircularProgressIndicator()
-                        : const Text('Save Changes'),
-                  ),
-                ),
-                const SizedBox(height: 16),
-              ],
+              ),
             ),
           );
         },

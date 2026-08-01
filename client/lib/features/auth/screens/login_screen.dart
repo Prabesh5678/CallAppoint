@@ -48,46 +48,54 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final screenWidth = MediaQuery.of(context).size.width;
-    final isMobile = screenWidth < 600;
-
     return Scaffold(
       appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
         actions: const [
           ThemeToggleButton(),
           SizedBox(width: 8),
         ],
       ),
-      extendBodyBehindAppBar: true,
-      body: SafeArea(
-        child: Center(
-          child: SingleChildScrollView(
-            padding: EdgeInsets.symmetric(
-              horizontal: isMobile ? 24 : screenWidth * 0.2,
-              vertical: 24,
-            ),
+      body: Center(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(24),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 450),
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                const SizedBox(height: 20),
-                const Icon(Icons.medical_services, size: 64, color: Colors.teal),
-                const SizedBox(height: 16),
-                const Text(
-                  'CallAppoint',
-                  style: TextStyle(fontSize: 32, fontWeight: FontWeight.bold),
+                Container(
+                  padding: const EdgeInsets.all(20),
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).colorScheme.primary.withOpacity(0.1),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(
+                    Icons.medical_services,
+                    size: 64,
+                    color: Theme.of(context).colorScheme.primary,
+                  ),
+                ),
+                const SizedBox(height: 24),
+                Text(
+                  'Welcome Back',
+                  style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: -1,
+                      ),
                 ),
                 const SizedBox(height: 8),
-                const Text(
-                  'Your Health, Simplified',
-                  style: TextStyle(fontSize: 16, color: Colors.grey),
+                Text(
+                  'Log in to continue your healthcare journey',
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: Theme.of(context).hintColor,
+                      ),
+                  textAlign: TextAlign.center,
                 ),
-                const SizedBox(height: 48),
+                const SizedBox(height: 40),
                 TextField(
                   controller: _emailController,
                   decoration: const InputDecoration(
-                    labelText: 'Email',
+                    hintText: 'Email Address',
                     prefixIcon: Icon(Icons.email_outlined),
                   ),
                   keyboardType: TextInputType.emailAddress,
@@ -96,49 +104,52 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 TextField(
                   controller: _passwordController,
                   decoration: const InputDecoration(
-                    labelText: 'Password',
+                    hintText: 'Password',
                     prefixIcon: Icon(Icons.lock_outline),
                   ),
                   obscureText: true,
                 ),
                 const SizedBox(height: 24),
                 if (_error != null)
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 16),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).colorScheme.error.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
                     child: Text(
                       _error!,
-                      style: const TextStyle(color: Colors.red),
+                      style: TextStyle(color: Theme.of(context).colorScheme.error, fontSize: 13),
                       textAlign: TextAlign.center,
                     ),
                   ),
-                SizedBox(
-                  width: double.infinity,
-                  height: 52,
-                  child: GestureDetector(
-                    onLongPress: () {
-                      context.push('/secret-admin');
-                    },
-                    child: ElevatedButton(
-                      onPressed: _loading ? null : _login,
-                      style: ElevatedButton.styleFrom(
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                      ),
-                      child: _loading
-                          ? const SizedBox(
-                              height: 24,
-                              width: 24,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            )
-                          : const Text('Log In', style: TextStyle(fontSize: 16)),
-                    ),
+                const SizedBox(height: 16),
+                GestureDetector(
+                  onLongPress: () => context.push('/secret-admin'),
+                  child: ElevatedButton(
+                    onPressed: _loading ? null : _login,
+                    child: _loading
+                        ? const SizedBox(
+                            height: 24,
+                            width: 24,
+                            child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                          )
+                        : const Text('Log In'),
                   ),
                 ),
-                const SizedBox(height: 16),
-                TextButton(
-                  onPressed: () => context.go('/signup'),
-                  child: const Text("Don't have an account? Sign up"),
+                const SizedBox(height: 24),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(
+                      "Don't have an account?",
+                      style: TextStyle(color: Theme.of(context).hintColor),
+                    ),
+                    TextButton(
+                      onPressed: () => context.go('/signup'),
+                      child: const Text("Sign up"),
+                    ),
+                  ],
                 ),
               ],
             ),

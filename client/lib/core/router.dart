@@ -8,8 +8,10 @@ import '../features/home/patient_home_screen.dart';
 import '../features/home/doctor_home_screen.dart';
 import '../features/doctors/screens/doctor_detail_screen.dart';
 import '../features/chat/screens/chat_screen.dart';
+import '../features/chat/screens/chat_attachments_screen.dart';
 import '../features/doctors/screens/apply_doctor_screen.dart';
 import '../features/auth/screens/profile_screen.dart';
+import '../features/home/about_screen.dart';
 import '../features/video/screens/video_call_screen.dart';
 import '../features/blogs/screens/blog_list_screen.dart';
 import '../features/blogs/screens/blog_detail_screen.dart';
@@ -53,6 +55,10 @@ final routerProvider = Provider<GoRouter>((ref) {
         builder: (context, state) => ChatScreen(appointmentId: state.pathParameters['appointmentId']!),
       ),
       GoRoute(
+        path: '/chat/:appointmentId/attachments',
+        builder: (context, state) => ChatAttachmentsScreen(appointmentId: state.pathParameters['appointmentId']!),
+      ),
+      GoRoute(
         path: '/video/:appointmentId',
         builder: (context, state) {
           final appointmentId = state.pathParameters['appointmentId']!;
@@ -70,6 +76,10 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/profile',
         builder: (context, state) => const ProfileScreen(),
+      ),
+      GoRoute(
+        path: '/about',
+        builder: (context, state) => const AboutScreen(),
       ),
       GoRoute(
         path: '/blogs',

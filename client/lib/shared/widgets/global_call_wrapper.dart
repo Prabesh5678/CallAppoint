@@ -1,12 +1,9 @@
-import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
 import 'package:simple_pip_mode/pip_widget.dart';
 import 'package:simple_pip_mode/simple_pip.dart';
-import 'package:go_router/go_router.dart';
 import '../../features/video/providers/video_call_provider.dart';
-import '../../core/globals.dart';
 import '../../core/router.dart';
 
 class GlobalCallWrapper extends ConsumerStatefulWidget {
@@ -84,23 +81,7 @@ class _GlobalCallWrapperState extends ConsumerState<GlobalCallWrapper> with Widg
     // 1. Check if we are physically on the video screen
     // We check both the provider and the router state for maximum reliability during transitions
     final router = ref.watch(routerProvider);
-    final configuration = router.routerDelegate.currentConfiguration;
-    String location = '';
-
-    // Safely extract location across different GoRouter versions
-    try {
-      if (configuration is RouteMatchList) {
-        location = configuration.uri.path;
-      } else if (configuration is Iterable && configuration.isNotEmpty) {
-        location = (configuration.last as RouteMatch).matchedLocation;
-      } else {
-        final matches = (configuration as dynamic).matches;
-        if (matches is List && matches.isNotEmpty) {
-          location = matches.last.matchedLocation;
-        }
-      }
-    } catch (_) {}
-
+    final location = router.routerDelegate.currentConfiguration.uri.path;
     final isOnVideoScreen = location.startsWith('/video/');
     final isInVideoScreen = isOnVideoScreen;
 
