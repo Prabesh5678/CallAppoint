@@ -142,10 +142,10 @@ CORS_ALLOW_HEADERS = list(default_headers) + [
     "x-admin-token",
 ]
 
-KHALTI_SECRET_KEY = config('KHALTI_SECRET_KEY')
-KHALTI_BASE_URL = config('KHALTI_BASE_URL')
-KHALTI_RETURN_URL = config('KHALTI_RETURN_URL')
-KHALTI_WEBSITE_URL = config('KHALTI_WEBSITE_URL')
+KHALTI_SECRET_KEY = config('KHALTI_SECRET_KEY', default='')
+KHALTI_BASE_URL = config('KHALTI_BASE_URL', default='https://dev.khalti.com/api/v2/epayment')
+KHALTI_RETURN_URL = config('KHALTI_RETURN_URL', default='https://call-appoint.azurewebsites.net/payment-callback/')
+KHALTI_WEBSITE_URL = config('KHALTI_WEBSITE_URL', default='https://call-appoint.azurewebsites.net')
 
 # Ensure HTTPS for Khalti URLs in production
 if not DEBUG:
@@ -154,12 +154,12 @@ if not DEBUG:
     if KHALTI_WEBSITE_URL.startswith('http://'):
         KHALTI_WEBSITE_URL = KHALTI_WEBSITE_URL.replace('http://', 'https://')
 
-ADMIN_API_TOKEN = config('ADMIN_API_TOKEN')
-ADMIN_USERNAME = config('ADMIN_USERNAME')
-ADMIN_PASSWORD = config('ADMIN_PASSWORD')
+ADMIN_API_TOKEN = config('ADMIN_API_TOKEN', default='dev_token')
+ADMIN_USERNAME = config('ADMIN_USERNAME', default='admin')
+ADMIN_PASSWORD = config('ADMIN_PASSWORD', default='admin')
 
-COTURN_URL = config('COTURN_URL')
-COTURN_SECRET = config('COTURN_SECRET')
-PUBLIC_IP = config('PUBLIC_IP')
+COTURN_URL = config('COTURN_URL', default='turn.20-2-129-98.sslip.io')
+COTURN_SECRET = config('COTURN_SECRET', default='')
+PUBLIC_IP = config('PUBLIC_IP', default='20.2.129.98')
 
-FIREBASE_CREDENTIALS_PATH = config('FIREBASE_CREDENTIALS_PATH')
+FIREBASE_CREDENTIALS_PATH = config('FIREBASE_CREDENTIALS_PATH', default='secrets/firebase-service-account.json')
