@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 import '../../shared/widgets/appointment_card.dart';
 import '../../shared/widgets/pulse_indicator.dart';
 import '../../shared/widgets/responsive_scaffold.dart';
@@ -9,7 +8,6 @@ import '../appointments/models/appointment.dart';
 import '../doctors/screens/availability_screen_body.dart';
 import '../notifications/providers/notification_provider.dart';
 import '../blogs/screens/blog_list_screen.dart';
-import '../auth/screens/profile_screen.dart';
 
 class DoctorHomeScreen extends ConsumerStatefulWidget {
   const DoctorHomeScreen({super.key});
@@ -67,11 +65,6 @@ class _DoctorHomeScreenState extends ConsumerState<DoctorHomeScreen> {
         selectedIcon: Icon(Icons.schedule),
         label: 'Schedule',
       ),
-      const NavigationDestinationItem(
-        icon: Icon(Icons.person_outline),
-        selectedIcon: Icon(Icons.person),
-        label: 'Profile',
-      ),
     ];
 
     return ResponsiveScaffold(
@@ -87,30 +80,13 @@ class _DoctorHomeScreenState extends ConsumerState<DoctorHomeScreen> {
           ? 'Doctor Appointments'
           : _tabIndex == 1
               ? 'Health Blogs'
-              : _tabIndex == 2
-                  ? 'Manage Schedule'
-                  : 'Doctor Profile'),
-      actions: [
-        if (_tabIndex == 0)
-          IconButton(
-            icon: const Icon(Icons.description_outlined),
-            tooltip: 'My Reports',
-            onPressed: () => context.push('/artifacts'),
-          ),
-        if (_tabIndex == 0 || _tabIndex == 2)
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            tooltip: 'Refresh',
-            onPressed: () => ref.invalidate(myAppointmentsProvider),
-          ),
-      ],
+              : 'Manage Schedule'),
       body: IndexedStack(
         index: _tabIndex,
         children: const [
           _DoctorAppointmentsView(),
           BlogListScreen(),
           _ScheduleTab(),
-          ProfileScreen(),
         ],
       ),
     );
