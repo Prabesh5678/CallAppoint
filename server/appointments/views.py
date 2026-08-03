@@ -208,35 +208,42 @@ def get_appointment_followups(request, pk):
 def get_ice_servers(request):
     if not settings.COTURN_SECRET:
         raise ValidationError("TURN configuration is missing on the server.")
-
     appointment_id = request.GET.get('appointment_id')
     call_attempt_id = request.GET.get('call_attempt_id')
-
     if not appointment_id or not call_attempt_id:
-        raise ValidationError("Both appointment_id and call_attempt_id are required for TURN credentials.")
-
-    # Strict 3-part format: {timestamp}:{appointmentId}:{callAttemptId}
-    expiry_time = int(time.time()) + 86400
+        raise ValidationError("Both appointment_id and call_attempt_id are required.")
+    # Generate Time-Limited Credentials
+    expiry_time = int(time.time()) + 86400  # 24 hours
     username = f"{expiry_time}:{appointment_id}:{call_attempt_id}"
-
     secret = settings.COTURN_SECRET.encode('utf-8')
     message = username.encode('utf-8')
     hashed = hmac.new(secret, message, hashlib.sha1)
     password = base64.b64encode(hashed.digest()).decode('utf-8')
 
+    # Routing through the frp tunnel on Azure (using PUBLIC_IP from .env)
+    # Only port 3478 (control) and the 49152-49202 relay range are tunneled right now.
+    PUBLIC_IP = settings.PUBLIC_IP
+
     return Response({
         'iceServers': [
             {'urls': ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302']},
-            {'urls': [f"stun:{settings.COTURN_URL}:3478"]},
+            {'urls': [f"stun:{PUBLIC_IP}:3478"]},
             {
-                'urls': [f"turn:{settings.COTURN_URL}:3478"],
+                'urls': [f"turn:{PUBLIC_IP}:3478"],
                 'username': username,
                 'credential': password,
             },
-            {
-                'urls': [f"turns:{settings.COTURN_URL}:5349?transport=tcp"],
-                'username': username,
-                'credential': password,
-            },
+            # --- PREVIOUSLY USED CODE (using settings/sslip.io) ---
+            # {'urls': [f"stun:{settings.COTURN_URL}:3478"]},
+            # {
+            #     'urls': [f"turn:{settings.COTURN_URL}:3478"],
+            #     'username': username,
+            #     'credential': password,
+            # },
+            # {
+            #     'urls': [f"turns:{settings.COTURN_URL}:5349?transport=tcp"],
+            #     'username': username,
+            #     'credential': password,
+            # },
         ]
     })
