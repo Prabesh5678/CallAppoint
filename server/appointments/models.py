@@ -1,7 +1,7 @@
 import uuid
 from django.db import models
 from accounts.models import User
-from doctors.models import DoctorProfile
+from doctors.models import DoctorProfile 
 
 class Appointment(models.Model):
     STATUS_CHOICES = [
