@@ -48,7 +48,10 @@ class _ResponsiveScaffoldState extends ConsumerState<ResponsiveScaffold> {
     final isWide = MediaQuery.of(context).size.width >= 900;
 
     return Scaffold(
+      // Standard drawer for mobile
       drawer: isWide ? null : _buildDrawer(context),
+      // Tune edge swipe width - 20.0 is standard and safe
+      drawerEdgeDragWidth: isWide ? 0 : 20.0,
       body: Row(
         children: [
           if (isWide) ...[
@@ -59,6 +62,16 @@ class _ResponsiveScaffoldState extends ConsumerState<ResponsiveScaffold> {
             child: Scaffold(
               appBar: AppBar(
                 title: widget.title,
+                // Add hamburger button for mobile
+                leading: isWide
+                    ? null
+                    : Builder(
+                        builder: (context) => IconButton(
+                          icon: const Icon(Icons.menu),
+                          onPressed: () => Scaffold.of(context).openDrawer(),
+                          tooltip: 'Open menu',
+                        ),
+                      ),
                 actions: [
                   ...?widget.actions,
                   const ThemeToggleButton(),

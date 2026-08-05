@@ -5,6 +5,7 @@ import 'package:simple_pip_mode/pip_widget.dart';
 import 'package:simple_pip_mode/simple_pip.dart';
 import '../../features/video/providers/video_call_provider.dart';
 import '../../core/router.dart';
+import '../../core/globals.dart';
 
 class GlobalCallWrapper extends ConsumerStatefulWidget {
   final Widget child;
@@ -79,11 +80,7 @@ class _GlobalCallWrapperState extends ConsumerState<GlobalCallWrapper> with Widg
   @override
   Widget build(BuildContext context) {
     // 1. Check if we are physically on the video screen
-    // We check both the provider and the router state for maximum reliability during transitions
-    final router = ref.watch(routerProvider);
-    final location = router.routerDelegate.currentConfiguration.uri.path;
-    final isOnVideoScreen = location.startsWith('/video/');
-    final isInVideoScreen = isOnVideoScreen;
+    final isInVideoScreen = ref.watch(isInVideoCallScreenProvider);
 
     // 2. Select other fields needed for rebuilding
     final appointmentId = ref.watch(videoCallNotifierProvider.select((s) => s.appointmentId));
@@ -177,8 +174,8 @@ class _GlobalCallWrapperState extends ConsumerState<GlobalCallWrapper> with Widg
           // Show connecting bar if remote hasn't joined yet and we are away from screen
           Positioned(
             top: MediaQuery.of(context).padding.top + 10,
-            left: 20,
-            right: 20,
+            left: 0,
+            right: 0,
             child: _InAppCallBar(
               appointmentId: appointmentId,
               remoteJoined: remoteJoined,
@@ -197,33 +194,52 @@ class _InAppCallBar extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final isConnected = ref.watch(videoCallNotifierProvider.select((s) => s.isConnected));
+
     return Material(
       color: Colors.transparent,
-      child: InkWell(
-        onTap: () => ref.read(routerProvider).push('/video/$appointmentId'),
-        borderRadius: BorderRadius.circular(30),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-          decoration: BoxDecoration(
-            color: Colors.green,
-            borderRadius: BorderRadius.circular(30),
-            boxShadow: const [
-              BoxShadow(color: Colors.black26, blurRadius: 10, offset: Offset(0, 4)),
-            ],
-          ),
-          child: Row(
-            children: [
-              const Icon(Icons.call, color: Colors.white, size: 20),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Text(
-                  remoteJoined ? 'Active Call - Tap to return' : 'Connecting...',
-                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+      child: Container(
+        margin: const EdgeInsets.symmetric(horizontal: 20),
+        decoration: BoxDecoration(
+          color: Colors.green.shade600,
+          borderRadius: BorderRadius.circular(30),
+          boxShadow: const [
+            BoxShadow(color: Colors.black26, blurRadius: 10, offset: Offset(0, 4)),
+          ],
+        ),
+        child: Row(
+          children: [
+            Expanded(
+              child: InkWell(
+                onTap: () => ref.read(routerProvider).push('/video/$appointmentId'),
+                borderRadius: BorderRadius.circular(30),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.call, color: Colors.white, size: 20),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          remoteJoined
+                              ? 'Active Call - Tap to return'
+                              : (isConnected ? 'Connected - Waiting for peer' : 'Connecting...'),
+                          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
-              const Icon(Icons.arrow_forward_ios, color: Colors.white70, size: 14),
-            ],
-          ),
+            ),
+            IconButton(
+              onPressed: () => ref.read(videoCallNotifierProvider.notifier).hangUp(),
+              icon: const Icon(Icons.call_end, color: Colors.white),
+              tooltip: 'Hang up',
+            ),
+            const SizedBox(width: 8),
+          ],
         ),
       ),
     );

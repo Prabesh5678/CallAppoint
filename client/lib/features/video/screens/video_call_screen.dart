@@ -85,13 +85,25 @@ class _VideoCallScreenState extends ConsumerState<VideoCallScreen> {
       child: Scaffold(
         backgroundColor: Colors.black,
           body: (callState.isConnecting && !callState.remoteJoined)
-            ? const Center(
+            ? Center(
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    CircularProgressIndicator(color: Colors.white),
-                    SizedBox(height: 20),
-                    Text('Waiting for other party to join...', style: TextStyle(color: Colors.white70)),
+                    const CircularProgressIndicator(color: Colors.white),
+                    const SizedBox(height: 20),
+                    const Text('Waiting for other party to join...', style: TextStyle(color: Colors.white70)),
+                    const SizedBox(height: 40),
+                    ElevatedButton.icon(
+                      onPressed: () => notifier.hangUp(),
+                      icon: const Icon(Icons.call_end),
+                      label: const Text('Cancel Call'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.red,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
+                      ),
+                    ),
                   ],
                 ),
               )

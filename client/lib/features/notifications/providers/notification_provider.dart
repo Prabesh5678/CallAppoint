@@ -101,7 +101,7 @@ class NotificationManager extends StateNotifier<Map<String, bool>> {
         }
 
         final roleTitle = role[0].toUpperCase() + role.substring(1);
-        messenger.clearSnackBars();
+        messenger.hideCurrentSnackBar();
 
         messenger.showSnackBar(
           SnackBar(
@@ -153,7 +153,7 @@ class NotificationManager extends StateNotifier<Map<String, bool>> {
 
       if (messenger == null) return;
 
-      messenger.clearSnackBars();
+      messenger.hideCurrentSnackBar();
       messenger.showSnackBar(
         SnackBar(
           content: Column(

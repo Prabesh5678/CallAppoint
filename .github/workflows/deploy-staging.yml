@@ -25,11 +25,13 @@ jobs:
         run: flutter pub get
 
       - name: Build Flutter Web (Staging)
-        working-directory: client
-        run: |
-          flutter build web --release \
-            --dart-define=API_URL=https://call-appoint-staging.azurewebsites.net/api \
-            --dart-define=WS_URL=wss://call-appoint-staging.azurewebsites.net
+  working-directory: client
+  run: |
+    flutter build web --release \
+      --dart-define=API_URL=https://call-appoint-staging.azurewebsites.net/api \
+      --dart-define=WS_URL=wss://call-appoint-staging.azurewebsites.net \
+      --dart-define=SUPABASE_URL=https://gcbgaftpqyhdiizmxpjh.supabase.co \
+      --dart-define=SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdjYmdhZnRwcXloZGlpem14cGpoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODU3NzE5NTYsImV4cCI6MjEwMTM0Nzk1Nn0.30qVS5Blqz2TFUlfoT_4svWOL8toGB5jp58j2ASUH8w
 
       - name: Deploy to Azure Static Web Apps
         uses: Azure/static-web-apps-deploy@v1

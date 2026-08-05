@@ -64,15 +64,24 @@ class AppointmentActions {
   }
 
   Future<void> cancelWithUndo({required String appointmentId, String? reason}) async {
-    final previousState = ref.read(myAppointmentsProvider).valueOrNull;
-    if (previousState == null) return;
+    final currentState = ref.read(myAppointmentsProvider).valueOrNull;
+    if (currentState == null) return;
 
-    final updatedList = previousState.where((a) => a.id != appointmentId).toList();
+    final index = currentState.indexWhere((a) => a.id == appointmentId);
+    if (index == -1) return;
+    final appointmentToCancel = currentState[index];
+
+    final updatedList = currentState.where((a) => a.id != appointmentId).toList();
     ref.read(myAppointmentsProvider.notifier).setAppointments(updatedList);
 
     final result = await UndoManager.showUndoSnackBar(
       message: 'Appointment cancelled',
-      onUndo: () => ref.read(myAppointmentsProvider.notifier).setAppointments(previousState),
+      onUndo: () {
+        final nowState = ref.read(myAppointmentsProvider).valueOrNull ?? [];
+        if (!nowState.any((a) => a.id == appointmentId)) {
+          ref.read(myAppointmentsProvider.notifier).setAppointments([...nowState, appointmentToCancel]);
+        }
+      },
     );
 
     if (!result.wasUndone) {
@@ -82,7 +91,11 @@ class AppointmentActions {
           data: {'reason': reason ?? ''},
         );
       } catch (e) {
-        ref.read(myAppointmentsProvider.notifier).setAppointments(previousState);
+        // If API fails, bring it back if it's not already there
+        final nowState = ref.read(myAppointmentsProvider).valueOrNull ?? [];
+        if (!nowState.any((a) => a.id == appointmentId)) {
+          ref.read(myAppointmentsProvider.notifier).setAppointments([...nowState, appointmentToCancel]);
+        }
         rethrow;
       }
     }

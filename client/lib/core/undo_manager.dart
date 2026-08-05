@@ -25,7 +25,9 @@ class UndoManager {
     });
 
     if (messenger != null) {
-      messenger.clearSnackBars();
+      // Removed: messenger.clearSnackBars();
+      // Allowing SnackBars to queue ensures that multiple undoable actions
+      // can be handled sequentially without prematurely committing previous ones.
       messenger.showSnackBar(
         SnackBar(
           content: Text(message),
@@ -50,10 +52,9 @@ class UndoManager {
     await userActionCompleter.future;
     timer.cancel();
 
-    if (!wasUndone) {
-      // Ensure visual dismissal before returning control to the caller (backend request)
-      messenger?.hideCurrentSnackBar(reason: SnackBarClosedReason.hide);
-    }
+    // Removed: messenger?.hideCurrentSnackBar(...)
+    // This was causing subsequent SnackBars to be dismissed prematurely
+    // when multiple actions were triggered in rapid succession.
 
     return UndoResult(wasUndone: wasUndone);
   }
