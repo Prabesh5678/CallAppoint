@@ -225,25 +225,27 @@ def get_ice_servers(request):
     PUBLIC_IP = settings.PUBLIC_IP
 
     return Response({
-        'iceServers': [
-            {'urls': ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302']},
-            {'urls': [f"stun:{PUBLIC_IP}:3478"]},
-            {
-                'urls': [f"turn:{PUBLIC_IP}:3478"],
-                'username': username,
-                'credential': password,
-            },
-            # --- PREVIOUSLY USED CODE (using settings/sslip.io) ---
-            # {'urls': [f"stun:{settings.COTURN_URL}:3478"]},
-            # {
-            #     'urls': [f"turn:{settings.COTURN_URL}:3478"],
-            #     'username': username,
-            #     'credential': password,
-            # },
-            # {
-            #     'urls': [f"turns:{settings.COTURN_URL}:5349?transport=tcp"],
-            #     'username': username,
-            #     'credential': password,
-            # },
-        ]
-    })
+    'iceServers': [
+        # {'urls': ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302']},
+        {'urls': [f"stun:{settings.COTURN_URL}:3478"]},
+        {
+            'urls': [f"turn:{settings.COTURN_URL}:3478"],
+            'username': username,
+            'credential': password,
+        },
+        {
+            'urls': [f"turns:{settings.COTURN_URL}:5349?transport=tcp"],
+            'username': username,
+            'credential': password,
+        },
+        # --- PREVIOUSLY USED: frp-tunneled laptop-hosted coturn ---
+        # (kept for quick switch-back if needed — laptop must be
+        # running coturn+frpc, and Azure running frps, for this to work)
+        # {'urls': [f"stun:{PUBLIC_IP}:3478"]},
+        # {
+        #     'urls': [f"turn:{PUBLIC_IP}:3478"],
+        #     'username': username,
+        #     'credential': password,
+        # },
+    ]
+})

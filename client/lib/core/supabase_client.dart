@@ -2,7 +2,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 const supabaseUrl = String.fromEnvironment(
   'SUPABASE_URL',
-  defaultValue: 'https://gcbgaftpqyhdiizmxpjh.supabase.co', // Production
+  defaultValue: 'https://gcbgaftpqyhdiizmxpjh.supabase.co', // Staging
 );
 
 const supabaseAnonKey = String.fromEnvironment(
