@@ -28,11 +28,10 @@ class _AvailabilityScreenBodyState
 
     return DefaultTabController(
       length: 2,
-      child: Scaffold(
-        appBar: AppBar(
-          title: const Text('My Schedule'),
-          bottom: PreferredSize(
-            preferredSize: const Size.fromHeight(110),
+      child: Column(
+        children: [
+          Material(
+            color: Theme.of(context).colorScheme.surface,
             child: Column(
               children: [
                 profileAsync.when(
@@ -86,29 +85,30 @@ class _AvailabilityScreenBodyState
               ],
             ),
           ),
-        ),
-        body: TabBarView(
-          children: [
-            _RoutineView(),
-            _ManageView(
-              onAdd: (day, start, end, duration) async {
-                try {
-                  await ref.read(availabilityControllerProvider).add(
-                        dayOfWeek: day,
-                        startTime: _fmtTimeOfDay(start),
-                        endTime: _fmtTimeOfDay(end),
-                        slotDurationMinutes: duration,
-                      );
-                  ref.invalidate(myAvailabilityProvider);
-                  ref.invalidate(myDoctorProfileProvider);
-                } catch (e) {
-                  // Error handling already in provider/controller or shown via snackbar
-                  rethrow;
-                }
-              },
+          Expanded(
+            child: TabBarView(
+              children: [
+                _RoutineView(),
+                _ManageView(
+                  onAdd: (day, start, end, duration) async {
+                    try {
+                      await ref.read(availabilityControllerProvider).add(
+                            dayOfWeek: day,
+                            startTime: _fmtTimeOfDay(start),
+                            endTime: _fmtTimeOfDay(end),
+                            slotDurationMinutes: duration,
+                          );
+                      ref.invalidate(myAvailabilityProvider);
+                      ref.invalidate(myDoctorProfileProvider);
+                    } catch (e) {
+                      rethrow;
+                    }
+                  },
+                ),
+              ],
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }

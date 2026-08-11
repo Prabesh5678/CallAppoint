@@ -12,6 +12,7 @@ import '../features/chat/screens/chat_attachments_screen.dart';
 import '../features/doctors/screens/apply_doctor_screen.dart';
 import '../features/auth/screens/profile_screen.dart';
 import '../features/home/about_screen.dart';
+import '../features/home/anatomy_test_screen.dart';
 import '../features/video/screens/video_call_screen.dart';
 import '../features/blogs/screens/blog_list_screen.dart';
 import '../features/blogs/screens/blog_detail_screen.dart';
@@ -80,6 +81,10 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/about',
         builder: (context, state) => const AboutScreen(),
+      ),
+      GoRoute(
+        path: '/test-3d',
+        builder: (context, state) => const AnatomyTestScreen(),
       ),
       GoRoute(
         path: '/blogs',

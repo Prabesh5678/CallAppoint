@@ -7,8 +7,6 @@ import '../providers/blog_provider.dart';
 import '../../auth/providers/auth_provider.dart';
 import 'widgets/blog_post_row.dart';
 
-import '../../../../core/theme_provider.dart';
-
 class BlogListScreen extends ConsumerWidget {
   const BlogListScreen({super.key});
 
@@ -16,7 +14,6 @@ class BlogListScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final blogsAsync = ref.watch(filteredBlogsProvider);
     final userProfileAsync = ref.watch(currentUserProfileProvider);
-    final themeMode = ref.watch(themeModeProvider);
 
     final isDoctor = userProfileAsync.maybeWhen(
       data: (profile) => profile['role'] == 'doctor',
@@ -28,27 +25,24 @@ class BlogListScreen extends ConsumerWidget {
     final isMobile = screenWidth < 640;
     final horizontalPadding = isMobile ? 16.0 : 24.0;
 
-    final bgColor = theme.scaffoldBackgroundColor;
-    final accentRed = theme.colorScheme.primary; // Using primary color from theme
+    final accentRed = theme.colorScheme.primary;
     final textColor = theme.colorScheme.onSurface;
     final subTextColor = theme.colorScheme.onSurface.withOpacity(0.7);
 
-    return Scaffold(
-      backgroundColor: bgColor,
-      body: SafeArea(
+    return SafeArea(
+      child: CenteredConstrainedBox(
+        maxWidth: 1000,
         child: RefreshIndicator(
           onRefresh: () async => ref.refresh(allBlogsProvider),
-          child: CenteredConstrainedBox(
-            maxWidth: 1000,
-            child: CustomScrollView(
-              slivers: [
+          child: CustomScrollView(
+            slivers: [
               SliverToBoxAdapter(
                 child: Padding(
                   padding: EdgeInsets.fromLTRB(
                     horizontalPadding,
-                    isMobile ? 32 : 56,
+                    isMobile ? 24 : 32,
                     horizontalPadding,
-                    isMobile ? 24 : 36,
+                    isMobile ? 16 : 24,
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -77,21 +71,12 @@ class BlogListScreen extends ConsumerWidget {
                           ),
                           Row(
                             children: [
-                              IconButton(
-                                icon: Icon(
-                                  themeMode == ThemeMode.dark
-                                      ? Icons.light_mode
-                                      : Icons.dark_mode,
-                                  color: textColor.withOpacity(0.7),
-                                ),
-                                onPressed: () =>
-                                    ref.read(themeModeProvider.notifier).toggle(),
-                              ),
                               _FilterButton(isDoctor: isDoctor),
                               if (isDoctor)
                                 IconButton(
                                   onPressed: () => context.push('/blogs/new'),
                                   icon: Icon(Icons.add, color: textColor),
+                                  tooltip: 'New Post',
                                 ),
                             ],
                           )
@@ -118,11 +103,12 @@ class BlogListScreen extends ConsumerWidget {
               blogsAsync.when(
                 data: (blogs) {
                   if (blogs.isEmpty) {
-                    return SliverFillRemaining(
+                    return const SliverFillRemaining(
+                      hasScrollBody: false,
                       child: Center(
                         child: Text(
                           'No blogs found',
-                          style: TextStyle(color: subTextColor),
+                          style: TextStyle(color: Colors.grey),
                         ),
                       ),
                     );
@@ -155,13 +141,15 @@ class BlogListScreen extends ConsumerWidget {
                   );
                 },
                 loading: () => const SliverFillRemaining(
+                  hasScrollBody: false,
                   child: Center(child: CircularProgressIndicator()),
                 ),
                 error: (e, _) => SliverFillRemaining(
+                  hasScrollBody: false,
                   child: Center(
                     child: Text(
                       'Error: $e',
-                      style: TextStyle(color: subTextColor),
+                      style: const TextStyle(color: Colors.grey),
                     ),
                   ),
                 ),
@@ -170,15 +158,6 @@ class BlogListScreen extends ConsumerWidget {
           ),
         ),
       ),
-    ),
-      floatingActionButton: isDoctor
-          ? FloatingActionButton(
-              heroTag: 'blog_list_fab',
-              onPressed: () => context.push('/blogs/new'),
-              backgroundColor: accentRed,
-              child: const Icon(Icons.add, color: Colors.white),
-            )
-          : null,
     );
   }
 }

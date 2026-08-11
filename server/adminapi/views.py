@@ -78,9 +78,21 @@ class AdminListDoctorsView(generics.ListAPIView):
         page = self.paginate_queryset(queryset)
 
         def format_doctor(d):
+            # Safe specialty fetching matching the logic in DoctorListSerializer
+            try:
+                specialties = [ds.specialty.name for ds in d.doctor_specialties.all()]
+            except AttributeError:
+                # If doctor_specialties is treated as a OneToOne due to PK misconfiguration
+                try:
+                    specialties = [d.doctor_specialties.specialty.name] if d.doctor_specialties else []
+                except:
+                    specialties = []
+            except:
+                specialties = []
+
             return {
                 'id': str(d.id_id),
-                'full_name': d.id.full_name,
+                'full_name': d.id.full_name if d.id else "Unknown User",
                 'license_number': d.license_number,
                 'verification_status': d.verification_status,
                 'consultation_fee': str(d.consultation_fee),
@@ -88,11 +100,11 @@ class AdminListDoctorsView(generics.ListAPIView):
                 'bio': d.bio,
                 'average_rating': float(d.average_rating),
                 'total_reviews': d.total_reviews,
-                'avatar_url': d.id.avatar_url,
+                'avatar_url': d.id.avatar_url if d.id else None,
                 'created_at': d.created_at,
                 'total_weekly_hours': d.total_weekly_hours,
                 'required_weekly_hours': d.required_weekly_hours,
-                'specialties': [ds.specialty.name for ds in d.doctor_specialties.all()]
+                'specialties': specialties
             }
 
         if page is not None:

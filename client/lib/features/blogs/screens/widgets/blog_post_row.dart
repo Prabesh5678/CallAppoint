@@ -63,7 +63,7 @@ class _BlogPostRowState extends State<BlogPostRow> {
             fontWeight: FontWeight.w600,
             height: 1.35,
             color: categoryColor == const Color(0xFFECECEC) ? textColor : categoryColor,
-            decoration: _isHovered ? TextDecoration.underline : null,
+            decoration: _isHovered ? TextDecoration.underline : TextDecoration.none,
           ),
         ),
         const SizedBox(height: 12),
@@ -102,8 +102,12 @@ class _BlogPostRowState extends State<BlogPostRow> {
     );
 
     Widget thumbnail = MouseRegion(
-      onEnter: (_) => setState(() => _isHovered = true),
-      onExit: (_) => setState(() => _isHovered = false),
+      onEnter: (_) => WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) setState(() => _isHovered = true);
+      }),
+      onExit: (_) => WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) setState(() => _isHovered = false);
+      }),
       child: AspectRatio(
         aspectRatio: isMobile ? 16 / 9 : 4 / 3,
         child: Container(
@@ -175,7 +179,9 @@ class _BlogPostRowState extends State<BlogPostRow> {
 
     return InkWell(
       onTap: widget.onTap,
-      onHover: (hovering) => setState(() => _isHovered = hovering),
+      onHover: (hovering) => WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) setState(() => _isHovered = hovering);
+      }),
       child: Container(
         padding: EdgeInsets.symmetric(vertical: isMobile ? 24 : 32),
         child: isMobile

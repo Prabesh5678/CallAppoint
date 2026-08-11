@@ -14,6 +14,7 @@ class Blog(models.Model):
     title = models.CharField(max_length=200)
     content = models.TextField()
     thumbnail_url = models.URLField(max_length=500, null=True, blank=True)
+    anatomy_model_type = models.CharField(max_length=50, null=True, blank=True)
     category = models.CharField(max_length=50, default='General')
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

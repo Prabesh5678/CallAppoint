@@ -11,6 +11,7 @@ import '../appointments/providers/appointment_provider.dart';
 import '../appointments/models/appointment.dart';
 import '../notifications/providers/notification_provider.dart';
 import '../blogs/screens/blog_list_screen.dart';
+import 'education_screen.dart';
 
 class PatientHomeScreen extends ConsumerStatefulWidget {
   const PatientHomeScreen({super.key});
@@ -68,6 +69,11 @@ class _PatientHomeScreenState extends ConsumerState<PatientHomeScreen> {
         selectedIcon: Icon(Icons.article),
         label: 'Blogs',
       ),
+      const NavigationDestinationItem(
+        icon: Icon(Icons.school_outlined),
+        selectedIcon: Icon(Icons.school),
+        label: 'Education',
+      ),
     ];
 
     return ResponsiveScaffold(
@@ -83,13 +89,30 @@ class _PatientHomeScreenState extends ConsumerState<PatientHomeScreen> {
           ? 'Find a Doctor'
           : _tabIndex == 1
               ? 'My Appointments'
-              : 'Health Blogs'),
+              : _tabIndex == 2
+                  ? 'Health Blogs'
+                  : 'Medical Education'),
+      actions: [
+        if (_tabIndex == 0 || _tabIndex == 1)
+          IconButton(
+            icon: const Icon(Icons.description_outlined),
+            tooltip: 'My Reports',
+            onPressed: () => context.push('/artifacts'),
+          ),
+        if (_tabIndex == 0)
+          IconButton(
+            icon: const Icon(Icons.medical_services_outlined),
+            tooltip: 'Become a Doctor',
+            onPressed: () => context.push('/apply-doctor'),
+          ),
+      ],
       body: IndexedStack(
         index: _tabIndex,
-        children: const [
+        children: [
           _FindDoctorsTab(),
           _MyAppointmentsTab(),
           BlogListScreen(),
+          EducationScreen(),
         ],
       ),
     );

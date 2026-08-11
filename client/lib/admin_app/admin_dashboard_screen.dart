@@ -65,6 +65,13 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> wit
         _allPatients = _extractResults(results[0].data);
         _allDoctors = _extractResults(results[1].data);
         _allSpecialties = _extractResults(results[2].data);
+
+        // DEBUG LOGS
+        debugPrint('ADMIN_LOAD: Fetched ${_allDoctors.length} total doctor records');
+        for (var doc in _allDoctors) {
+          debugPrint('DOCTOR_RECORD: ${doc['full_name']} | Status: ${doc['verification_status']}');
+        }
+
         _applyFilters();
         _loading = false;
       });
@@ -79,48 +86,79 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> wit
   }
 
   List<dynamic> _extractResults(dynamic data) {
-    if (data is Map && data.containsKey('results')) {
-      return data['results'] as List;
+    if (data is Map) {
+      if (data.containsKey('results')) {
+        return data['results'] as List;
+      }
+      // If it's a Map but doesn't have 'results', it might be an error or single object
+      return [];
     }
-    return data as List;
+    if (data is List) {
+      return data;
+    }
+    return [];
   }
 
   void _applyFilters() {
-    setState(() {
-      var approved = _allDoctors.where((d) => d['verification_status'] == 'approved').toList();
+    // Note: No longer calling setState() inside here to avoid nested updates.
+    // Callers should wrap this in setState if they need a rebuild.
+    var approved = _allDoctors.where((d) => d != null && d['verification_status'] == 'approved').toList();
 
-      if (_showUnderFulfilledOnly) {
-        approved = approved.where((d) {
-          final total = (d['total_weekly_hours'] ?? 0).toDouble();
-          final required = (d['required_weekly_hours'] ?? 20).toDouble();
-          return total < required;
-        }).toList();
-      }
+    if (_showUnderFulfilledOnly) {
+      approved = approved.where((d) {
+        if (d == null) return false;
+        final total = (d['total_weekly_hours'] ?? 0).toDouble();
+        final required = (d['required_weekly_hours'] ?? 20).toDouble();
+        return total < required;
+      }).toList();
+    }
 
-      if (_selectedSpecialtyId == null) {
+    if (_selectedSpecialtyId == null) {
+      _filteredDoctors = approved;
+    } else {
+      final specialty = _allSpecialties.cast<Map<String, dynamic>?>().firstWhere(
+        (s) => s?['id'] == _selectedSpecialtyId,
+        orElse: () => null,
+      );
+
+      if (specialty == null) {
         _filteredDoctors = approved;
-      } else {
-        final specialty = _allSpecialties.cast<Map<String, dynamic>?>().firstWhere(
-          (s) => s?['id'] == _selectedSpecialtyId,
-          orElse: () => null,
-        );
-
-        if (specialty == null) {
-          _filteredDoctors = approved;
-          return;
-        }
-
-        final specName = specialty['name'];
-        _filteredDoctors = approved.where((d) {
-          final List specs = d['specialties'] ?? [];
-          return specs.contains(specName);
-        }).toList();
+        return;
       }
-    });
+
+      final specName = specialty['name'];
+      _filteredDoctors = approved.where((d) {
+        if (d == null) return false;
+        final List specs = d['specialties'] ?? [];
+        return specs.contains(specName);
+      }).toList();
+    }
   }
 
   List<dynamic> get _pendingRequests =>
-      _allDoctors.where((d) => d['verification_status'] == 'pending').toList();
+      _allDoctors.where((d) => d != null && (d['verification_status'] == 'pending' || d['verification_status'] == 'rejected')).toList();
+
+  Future<void> _showApproveDialog(String id, String name) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text("Confirm Approval"),
+        content: Text("Are you sure you want to approve $name? This will make this person a doctor and allow them to manage appointments."),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text("Cancel")),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.green, foregroundColor: Colors.white),
+            child: const Text("Approve"),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      _approveDoctor(id);
+    }
+  }
 
   Future<void> _approveDoctor(String id) async {
     final originalDoctors = List.from(_allDoctors);
@@ -395,7 +433,7 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> wit
               ElevatedButton(
                 onPressed: () {
                   Navigator.pop(context);
-                  _approveDoctor(doc['id']);
+                  _showApproveDialog(doc['id'], doc['full_name'] ?? 'this doctor');
                 },
                 child: const Text('Approve'),
               ),
@@ -481,47 +519,66 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> wit
 
   Widget _buildRequestsTab() {
     final colorScheme = Theme.of(context).colorScheme;
+    final pending = _allDoctors
+        .where((d) =>
+            d != null &&
+            (d['verification_status'] == 'pending' ||
+                d['verification_status'] == 'rejected'))
+        .toList();
+
+    debugPrint('RENDER_REQUESTS_TAB: Found ${pending.length} pending/rejected items');
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _buildSectionHeader('Verification Requests'),
         Expanded(
-          child: _pendingRequests.isEmpty
+          child: pending.isEmpty
               ? Center(
-                  child: Text('Currently no pending requests', style: TextStyle(color: colorScheme.onSurfaceVariant, fontSize: 16)),
+                  child: Text('Currently no pending requests',
+                      style: TextStyle(
+                          color: colorScheme.onSurface.withOpacity(0.6),
+                          fontSize: 16)),
                 )
               : ListView.builder(
-                  itemCount: _pendingRequests.length,
+                  itemCount: pending.length,
+                  key: ValueKey('pending_list_${pending.length}'),
                   itemBuilder: (context, i) {
-                    final doc = _pendingRequests[i];
+                    final doc = pending[i];
+                    if (doc == null) return const SizedBox();
                     return Card(
                       margin: const EdgeInsets.only(bottom: 12),
                       elevation: 0,
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(12),
-                        side: BorderSide(color: colorScheme.outlineVariant),
+                        side: BorderSide(
+                            color: colorScheme.outline.withOpacity(0.2)),
                       ),
                       child: ListTile(
                         onTap: () => _showDoctorDetails(doc),
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-                        title: Text(doc['full_name'] ?? '', style: const TextStyle(fontWeight: FontWeight.bold)),
-                        subtitle: Text('License: ${doc['license_number']}'),
-                        trailing: Row(
-                          mainAxisSize: MainAxisSize.min,
+                        contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 20, vertical: 8),
+                        title: Text(doc['full_name'] ?? 'Unknown Doctor',
+                            style:
+                                const TextStyle(fontWeight: FontWeight.bold)),
+                        subtitle:
+                            Text('License: ${doc['license_number'] ?? 'N/A'}'),
+                        // Use a Wrap instead of a Row to avoid infinite width layout crashes
+                        trailing: Wrap(
+                          spacing: 8,
                           children: [
-                            ElevatedButton(
-                              onPressed: () => _approveDoctor(doc['id']),
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: Colors.green.withValues(alpha: 0.1),
-                                foregroundColor: Colors.green,
-                                elevation: 0,
-                              ),
+                            TextButton(
+                              onPressed: () => _showApproveDialog(
+                                  doc['id']?.toString() ?? '', doc['full_name'] ?? 'this doctor'),
+                              style: TextButton.styleFrom(
+                                  foregroundColor: Colors.green),
                               child: const Text('Approve'),
                             ),
-                            const SizedBox(width: 8),
                             TextButton(
-                              onPressed: () => _showRejectDialog(doc['id']),
-                              style: TextButton.styleFrom(foregroundColor: Colors.red),
+                              onPressed: () => _showRejectDialog(
+                                  doc['id']?.toString() ?? ''),
+                              style: TextButton.styleFrom(
+                                  foregroundColor: Colors.red),
                               child: const Text('Decline'),
                             ),
                           ],
@@ -562,8 +619,10 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> wit
                     ..._allSpecialties.map((s) => DropdownMenuItem(value: s['id'], child: Text(s['name'] ?? ''))),
                   ],
                   onChanged: (val) {
-                    _selectedSpecialtyId = val;
-                    _applyFilters();
+                    setState(() {
+                      _selectedSpecialtyId = val;
+                      _applyFilters();
+                    });
                   },
                 ),
               ),
@@ -751,7 +810,13 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> wit
 
   Widget _buildSidebarItem(int index, IconData icon, String label) {
     final bool isSelected = _selectedIndex == index;
-    final colorScheme = Theme.of(context).colorScheme;
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+
+    // Defensive color selection
+    final selectedColor = colorScheme.primary;
+    final unselectedColor = colorScheme.onSurface.withOpacity(0.7);
+    final containerColor = isSelected ? colorScheme.primaryContainer : Colors.transparent;
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
@@ -766,18 +831,18 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> wit
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           decoration: BoxDecoration(
-            color: isSelected ? colorScheme.primaryContainer : Colors.transparent,
+            color: containerColor,
             borderRadius: BorderRadius.circular(8),
           ),
           child: Row(
             children: [
-              Icon(icon, color: isSelected ? colorScheme.primary : colorScheme.onSurfaceVariant),
+              Icon(icon, color: isSelected ? selectedColor : unselectedColor),
               const SizedBox(width: 16),
               Text(
                 label,
                 style: TextStyle(
                   fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                  color: isSelected ? colorScheme.primary : colorScheme.onSurfaceVariant,
+                  color: isSelected ? selectedColor : unselectedColor,
                 ),
               ),
             ],
@@ -791,20 +856,17 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> wit
     if (_loading) return const Center(child: CircularProgressIndicator());
     return Padding(
       padding: const EdgeInsets.all(32),
-      child: AnimatedSwitcher(
-        duration: const Duration(milliseconds: 200),
-        child: KeyedSubtree(
-          key: ValueKey(_selectedIndex),
-          child: () {
-            switch (_selectedIndex) {
-              case 0: return _buildRequestsTab();
-              case 1: return _buildDoctorsTab();
-              case 2: return _buildPatientsTab();
-              case 3: return _buildDivisionsTab();
-              default: return const SizedBox();
-            }
-          }(),
-        ),
+      child: KeyedSubtree(
+        key: ValueKey(_selectedIndex),
+        child: () {
+          switch (_selectedIndex) {
+            case 0: return _buildRequestsTab();
+            case 1: return _buildDoctorsTab();
+            case 2: return _buildPatientsTab();
+            case 3: return _buildDivisionsTab();
+            default: return const SizedBox();
+          }
+        }(),
       ),
     );
   }
@@ -823,52 +885,55 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> wit
             Container(
               width: 280,
               color: colorScheme.surface,
-              child: Column(
-                children: [
-                  Padding(
-                    padding: const EdgeInsets.all(24),
-                    child: Row(
-                      children: [
-                        Icon(Icons.health_and_safety, color: colorScheme.primary, size: 32),
-                        const SizedBox(width: 12),
-                        const Text('CallAppoint', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-                      ],
+              child: Material(
+                color: Colors.transparent,
+                child: Column(
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.all(24),
+                      child: Row(
+                        children: [
+                          Icon(Icons.health_and_safety, color: colorScheme.primary, size: 32),
+                          const SizedBox(width: 12),
+                          const Text('CallAppoint', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+                        ],
+                      ),
                     ),
-                  ),
-                  const Divider(height: 1),
-                  const SizedBox(height: 16),
-                  _buildSidebarItem(0, Icons.pending_actions, 'Requests'),
-                  _buildSidebarItem(1, Icons.person, 'Doctors'),
-                  _buildSidebarItem(2, Icons.people, 'Patients'),
-                  _buildSidebarItem(3, Icons.category, 'Divisions'),
-                  const Spacer(),
-                  const Divider(height: 1),
-                  Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Column(
-                      children: [
-                        ListTile(
-                          leading: CircleAvatar(
-                            backgroundColor: colorScheme.primary,
-                            child: const Icon(Icons.admin_panel_settings, color: Colors.white, size: 20),
+                    const Divider(height: 1),
+                    const SizedBox(height: 16),
+                    _buildSidebarItem(0, Icons.pending_actions, 'Requests'),
+                    _buildSidebarItem(1, Icons.person, 'Doctors'),
+                    _buildSidebarItem(2, Icons.people, 'Patients'),
+                    _buildSidebarItem(3, Icons.category, 'Divisions'),
+                    const Spacer(),
+                    const Divider(height: 1),
+                    Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        children: [
+                          ListTile(
+                            leading: CircleAvatar(
+                              backgroundColor: colorScheme.primary,
+                              child: const Icon(Icons.admin_panel_settings, color: Colors.white, size: 20),
+                            ),
+                            title: const Text('Admin User', style: TextStyle(fontWeight: FontWeight.bold)),
+                            subtitle: const Text('System Manager', style: TextStyle(fontSize: 12)),
                           ),
-                          title: const Text('Admin User', style: TextStyle(fontWeight: FontWeight.bold)),
-                          subtitle: const Text('System Manager', style: TextStyle(fontSize: 12)),
-                        ),
-                        const SizedBox(height: 8),
-                        TextButton.icon(
-                          onPressed: _logout,
-                          icon: const Icon(Icons.logout),
-                          label: const Text('Log Out'),
-                          style: TextButton.styleFrom(
-                            foregroundColor: colorScheme.error,
-                            minimumSize: const Size(double.infinity, 44),
+                          const SizedBox(height: 8),
+                          TextButton.icon(
+                            onPressed: _logout,
+                            icon: const Icon(Icons.logout),
+                            label: const Text('Log Out'),
+                            style: TextButton.styleFrom(
+                              foregroundColor: colorScheme.error,
+                              minimumSize: const Size(200, 44),
+                            ),
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
             const VerticalDivider(width: 1, thickness: 1),
@@ -892,10 +957,7 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> wit
                           tooltip: 'Refresh Data',
                         ),
                         const SizedBox(width: 8),
-                        const Badge(
-                          label: Text('3'),
-                          child: Icon(Icons.notifications_outlined),
-                        ),
+                        const Icon(Icons.notifications_outlined),
                       ],
                     ),
                   ),

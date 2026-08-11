@@ -1,6 +1,3 @@
-- Modernized UI with refined Teal theme, Poppins typography, and responsive layouts across all screens.
-- Redesigned Appointment and Doctor cards for a cleaner, consistent visual experience.
-- Implemented a responsive collapsible sidebar and centralized global Dark/Light mode theme toggle.
-- Integrated secure medical report sharing (PDF/Image) with private storage and RLS protection.
-- Enhanced Chat with a "Media & Reports" attachment section and file selection preview.
-- Upgraded Blog with theme support and high-resolution image viewer featuring zoom/pan controls.
+- Improved doctor application flow with re-application support, fixed Admin Dashboard layout crashes, and added an approval confirmation dialog.
+- Integrated 3D Anatomy Explorer using a high-performance WebGL portal, enabling interactive organ visualization across blogs and a new Education tab.
+- Added Django backend support for anatomy metadata and implemented a responsive 3D viewer with dynamic deep-linking for medical education.

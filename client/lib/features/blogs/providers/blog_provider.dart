@@ -58,6 +58,7 @@ class BlogActions {
     required String content,
     String? category,
     String? thumbnailUrl,
+    String? anatomyModelType,
   }) async {
     await DioClient.instance.post(
       '/blogs/',
@@ -66,6 +67,7 @@ class BlogActions {
         'content': content,
         'category': category ?? 'General',
         'thumbnail_url': thumbnailUrl,
+        'anatomy_model_type': anatomyModelType,
       },
     );
     ref.invalidate(allBlogsProvider);
@@ -77,6 +79,7 @@ class BlogActions {
     required String content,
     String? category,
     String? thumbnailUrl,
+    String? anatomyModelType,
   }) async {
     await DioClient.instance.put(
       '/blogs/$id/',
@@ -85,6 +88,7 @@ class BlogActions {
         'content': content,
         'category': category ?? 'General',
         'thumbnail_url': thumbnailUrl,
+        'anatomy_model_type': anatomyModelType,
       },
     );
     ref.invalidate(allBlogsProvider);

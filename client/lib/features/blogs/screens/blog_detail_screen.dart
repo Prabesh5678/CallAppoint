@@ -7,6 +7,7 @@ import '../../../shared/widgets/centered_constrained_box.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../providers/blog_provider.dart';
 import '../../auth/providers/auth_provider.dart';
+import '../../../shared/widgets/anatomy_viewer.dart';
 
 import '../../../../core/theme_provider.dart';
 
@@ -330,6 +331,30 @@ class BlogDetailScreen extends ConsumerWidget {
                           ],
                         ),
                         const SizedBox(height: 24),
+                        if (blog.anatomyModelType != null && blog.anatomyModelType!.isNotEmpty)
+                          Padding(
+                            padding: const EdgeInsets.only(bottom: 24),
+                            child: SizedBox(
+                              width: double.infinity,
+                              child: ElevatedButton.icon(
+                                icon: const Icon(Icons.view_in_ar, size: 20),
+                                label: Text('VIEW 3D ${blog.anatomyModelType!.toUpperCase()} MODEL'),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: theme.colorScheme.primary,
+                                  foregroundColor: Colors.white,
+                                  padding: const EdgeInsets.symmetric(vertical: 12),
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                ),
+                                onPressed: () {
+                                  Navigator.of(context).push(
+                                    MaterialPageRoute(
+                                      builder: (context) => AnatomyViewer(organ: blog.anatomyModelType!),
+                                    ),
+                                  );
+                                },
+                              ),
+                            ),
+                          ),
                         Text(
                           blog.content,
                           style: GoogleFonts.inter(

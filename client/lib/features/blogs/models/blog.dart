@@ -6,6 +6,7 @@ class Blog {
   final String title;
   final String content;
   final String? thumbnailUrl;
+  final String? anatomyModelType;
   final String category;
   final DateTime createdAt;
   final DateTime updatedAt;
@@ -18,6 +19,7 @@ class Blog {
     required this.title,
     required this.content,
     this.thumbnailUrl,
+    this.anatomyModelType,
     required this.category,
     required this.createdAt,
     required this.updatedAt,
@@ -40,6 +42,7 @@ class Blog {
       title: json['title'] ?? 'No Title',
       content: json['content'] ?? '',
       thumbnailUrl: json['thumbnail_url'],
+      anatomyModelType: json['anatomy_model_type'],
       category: json['category'] ?? 'General',
       createdAt: DateTime.parse(json['created_at']).toLocal(),
       updatedAt: DateTime.parse(json['updated_at']).toLocal(),
@@ -51,6 +54,7 @@ class Blog {
       'title': title,
       'content': content,
       'thumbnail_url': thumbnailUrl,
+      'anatomy_model_type': anatomyModelType,
       'category': category,
     };
   }

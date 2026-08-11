@@ -11,7 +11,7 @@ class BlogSerializer(serializers.ModelSerializer):
         model = Blog
         fields = [
             'id', 'doctor_id', 'doctor_name', 'doctor_avatar_url',
-            'title', 'content', 'thumbnail_url', 'category',
+            'title', 'content', 'thumbnail_url', 'anatomy_model_type', 'category',
             'created_at', 'updated_at'
         ]
         read_only_fields = ['id', 'doctor_id', 'created_at', 'updated_at']

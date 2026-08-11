@@ -42,61 +42,56 @@ class ResponsiveScaffold extends ConsumerStatefulWidget {
 
 class _ResponsiveScaffoldState extends ConsumerState<ResponsiveScaffold> {
   bool _isCollapsed = false;
+  final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
 
   @override
   Widget build(BuildContext context) {
-    final isWide = MediaQuery.of(context).size.width >= 900;
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isWide = screenWidth >= 900;
+    final theme = Theme.of(context);
 
     return Scaffold(
-      // Standard drawer for mobile
+      key: _scaffoldKey,
       drawer: isWide ? null : _buildDrawer(context),
-      // Tune edge swipe width - 20.0 is standard and safe
       drawerEdgeDragWidth: isWide ? 0 : 20.0,
+      appBar: AppBar(
+        title: widget.title,
+        leading: isWide
+            ? null
+            : IconButton(
+                icon: const Icon(Icons.menu),
+                onPressed: () => _scaffoldKey.currentState?.openDrawer(),
+                tooltip: 'Open menu',
+              ),
+        actions: [
+          ...?widget.actions,
+          const ThemeToggleButton(),
+          const SizedBox(width: 8),
+        ],
+      ),
       body: Row(
         children: [
-          if (isWide) ...[
+          if (isWide)
             _buildSidebar(context),
-            const VerticalDivider(width: 1, thickness: 1),
-          ],
           Expanded(
-            child: Scaffold(
-              appBar: AppBar(
-                title: widget.title,
-                // Add hamburger button for mobile
-                leading: isWide
-                    ? null
-                    : Builder(
-                        builder: (context) => IconButton(
-                          icon: const Icon(Icons.menu),
-                          onPressed: () => Scaffold.of(context).openDrawer(),
-                          tooltip: 'Open menu',
-                        ),
-                      ),
-                actions: [
-                  ...?widget.actions,
-                  const ThemeToggleButton(),
-                  const SizedBox(width: 8),
-                ],
-              ),
-              body: widget.body,
-              bottomNavigationBar: isWide
-                  ? null
-                  : NavigationBar(
-                      selectedIndex: widget.selectedIndex,
-                      onDestinationSelected: widget.onDestinationSelected,
-                      destinations: widget.destinations
-                          .map((d) => NavigationDestination(
-                                icon: d.icon,
-                                selectedIcon: d.selectedIcon,
-                                label: d.label,
-                              ))
-                          .toList(),
-                    ),
-              floatingActionButton: widget.floatingActionButton,
-            ),
+            child: widget.body,
           ),
         ],
       ),
+      bottomNavigationBar: isWide
+          ? null
+          : NavigationBar(
+              selectedIndex: widget.selectedIndex,
+              onDestinationSelected: widget.onDestinationSelected,
+              destinations: widget.destinations
+                  .map((d) => NavigationDestination(
+                        icon: d.icon,
+                        selectedIcon: d.selectedIcon,
+                        label: d.label,
+                      ))
+                  .toList(),
+            ),
+      floatingActionButton: widget.floatingActionButton,
     );
   }
 
@@ -149,6 +144,14 @@ class _ResponsiveScaffoldState extends ConsumerState<ResponsiveScaffold> {
               context.push('/artifacts');
             },
           ),
+          ListTile(
+            leading: const Icon(Icons.medical_services_outlined),
+            title: const Text('Become a Doctor'),
+            onTap: () {
+              Navigator.pop(context);
+              context.push('/apply-doctor');
+            },
+          ),
           const Spacer(),
           const Divider(),
           const ListTile(
@@ -167,8 +170,7 @@ class _ResponsiveScaffoldState extends ConsumerState<ResponsiveScaffold> {
     final theme = Theme.of(context);
     final sidebarWidth = _isCollapsed ? 80.0 : 260.0;
 
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 200),
+    return Container(
       width: sidebarWidth,
       color: theme.colorScheme.surface,
       child: Column(
@@ -178,28 +180,17 @@ class _ResponsiveScaffoldState extends ConsumerState<ResponsiveScaffold> {
             child: Row(
               mainAxisAlignment: _isCollapsed ? MainAxisAlignment.center : MainAxisAlignment.spaceBetween,
               children: [
-                if (!_isCollapsed) ...[
-                  Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(8),
-                        decoration: BoxDecoration(
-                          color: theme.colorScheme.primary,
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: const Icon(Icons.medical_services, color: Colors.white, size: 24),
+                if (!_isCollapsed)
+                  Expanded(
+                    child: Text(
+                      'CallAppoint',
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.titleLarge?.copyWith(
+                        fontWeight: FontWeight.bold,
+                        color: theme.colorScheme.primary,
                       ),
-                      const SizedBox(width: 12),
-                      Text(
-                        'CallAppoint',
-                        style: theme.textTheme.titleLarge?.copyWith(
-                          fontWeight: FontWeight.bold,
-                          color: theme.colorScheme.primary,
-                        ),
-                      ),
-                    ],
+                    ),
                   ),
-                ],
                 IconButton(
                   icon: Icon(_isCollapsed ? Icons.chevron_right : Icons.chevron_left),
                   onPressed: () => setState(() => _isCollapsed = !_isCollapsed),
@@ -208,7 +199,6 @@ class _ResponsiveScaffoldState extends ConsumerState<ResponsiveScaffold> {
               ],
             ),
           ),
-          const SizedBox(height: 8),
           Expanded(
             child: ListView.separated(
               padding: const EdgeInsets.symmetric(horizontal: 12),
@@ -218,51 +208,13 @@ class _ResponsiveScaffoldState extends ConsumerState<ResponsiveScaffold> {
                 final d = widget.destinations[index];
                 final isSelected = widget.selectedIndex == index;
 
-                if (_isCollapsed) {
-                  return Center(
-                    child: IconButton(
-                      icon: IconTheme(
-                        data: IconThemeData(
-                          color: isSelected ? theme.colorScheme.primary : theme.colorScheme.onSurfaceVariant,
-                          size: 24,
-                        ),
-                        child: isSelected ? d.selectedIcon : d.icon,
-                      ),
-                      onPressed: () => widget.onDestinationSelected(index),
-                      tooltip: d.label,
-                    ),
-                  );
-                }
-
-                return InkWell(
+                return _SidebarItem(
+                  icon: d.icon,
+                  selectedIcon: d.selectedIcon,
+                  label: d.label,
+                  isSelected: isSelected,
+                  isCollapsed: _isCollapsed,
                   onTap: () => widget.onDestinationSelected(index),
-                  borderRadius: BorderRadius.circular(12),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                    decoration: BoxDecoration(
-                      color: isSelected ? theme.colorScheme.primary.withOpacity(0.1) : Colors.transparent,
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Row(
-                      children: [
-                        IconTheme(
-                          data: IconThemeData(
-                            color: isSelected ? theme.colorScheme.primary : theme.colorScheme.onSurfaceVariant,
-                            size: 24,
-                          ),
-                          child: isSelected ? d.selectedIcon : d.icon,
-                        ),
-                        const SizedBox(width: 16),
-                        Text(
-                          d.label,
-                          style: theme.textTheme.bodyMedium?.copyWith(
-                            fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                            color: isSelected ? theme.colorScheme.primary : theme.colorScheme.onSurfaceVariant,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
                 );
               },
             ),
@@ -274,12 +226,72 @@ class _ResponsiveScaffoldState extends ConsumerState<ResponsiveScaffold> {
               title: const Text('Profile'),
               onTap: () => context.push('/profile'),
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-              contentPadding: const EdgeInsets.symmetric(horizontal: 16),
             ),
             _LogoutTile(),
           ],
           const SizedBox(height: 16),
         ],
+      ),
+    );
+  }
+}
+
+class _SidebarItem extends StatelessWidget {
+  final Widget icon;
+  final Widget selectedIcon;
+  final String label;
+  final bool isSelected;
+  final bool isCollapsed;
+  final VoidCallback onTap;
+
+  const _SidebarItem({
+    required this.icon,
+    required this.selectedIcon,
+    required this.label,
+    required this.isSelected,
+    required this.isCollapsed,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        height: 48,
+        padding: EdgeInsets.symmetric(horizontal: isCollapsed ? 0 : 16),
+        decoration: BoxDecoration(
+          color: isSelected ? theme.colorScheme.primary.withOpacity(0.1) : Colors.transparent,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Row(
+          mainAxisAlignment: isCollapsed ? MainAxisAlignment.center : MainAxisAlignment.start,
+          children: [
+            IconTheme(
+              data: IconThemeData(
+                color: isSelected ? theme.colorScheme.primary : theme.colorScheme.onSurfaceVariant,
+                size: 24,
+              ),
+              child: isSelected ? selectedIcon : icon,
+            ),
+            if (!isCollapsed) ...[
+              const SizedBox(width: 16),
+              Expanded(
+                child: Text(
+                  label,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                    color: isSelected ? theme.colorScheme.primary : theme.colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ),
+            ],
+          ],
+        ),
       ),
     );
   }

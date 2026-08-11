@@ -83,12 +83,13 @@ class ArtifactListScreen extends ConsumerWidget {
           artifactsAsync.when(
             data: (artifacts) => artifacts.isEmpty
                 ? SliverFillRemaining(
+                    hasScrollBody: false,
                     child: Center(
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          Icon(Icons.folder_open, size: 64, color: Colors.grey),
-                          SizedBox(height: 16),
+                          const Icon(Icons.folder_open, size: 64, color: Colors.grey),
+                          const SizedBox(height: 16),
                           Text(
                             currentFilter != null && currentFilter != 'All'
                                 ? 'No $currentFilter records found.'
@@ -101,26 +102,27 @@ class ArtifactListScreen extends ConsumerWidget {
                   )
                 : SliverPadding(
                     padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                    sliver: SliverToBoxAdapter(
-                      child: CenteredConstrainedBox(
-                        maxWidth: 900,
-                        child: ListView.builder(
-                          shrinkWrap: true,
-                          physics: const NeverScrollableScrollPhysics(),
-                          padding: EdgeInsets.zero,
-                          itemCount: artifacts.length,
-                          itemBuilder: (context, index) {
-                            final artifact = artifacts[index];
-                            return _buildArtifactCard(context, artifact);
-                          },
-                        ),
+                    sliver: SliverList(
+                      delegate: SliverChildBuilderDelegate(
+                        (context, index) {
+                          final artifact = artifacts[index];
+                          return Center(
+                            child: ConstrainedBox(
+                              constraints: const BoxConstraints(maxWidth: 900),
+                              child: _buildArtifactCard(context, artifact),
+                            ),
+                          );
+                        },
+                        childCount: artifacts.length,
                       ),
                     ),
                   ),
             loading: () => const SliverFillRemaining(
+              hasScrollBody: false,
               child: Center(child: CircularProgressIndicator()),
             ),
             error: (err, stack) => SliverFillRemaining(
+              hasScrollBody: false,
               child: Center(child: Text('Error: $err')),
             ),
           ),

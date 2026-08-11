@@ -145,7 +145,7 @@ class ApplyForDoctorView(generics.CreateAPIView):
             DoctorSpecialty.objects.filter(doctor=profile).delete()
         else:
             profile = DoctorProfile.objects.create(
-                id_id=user.id,
+                id=user.db_user,
                 license_number=serializer.validated_data['license_number'],
                 bio=serializer.validated_data.get('bio', ''),
                 years_experience=serializer.validated_data.get('years_experience', 0),
@@ -158,7 +158,8 @@ class ApplyForDoctorView(generics.CreateAPIView):
         self.instance = profile
 
     def create(self, request, *args, **kwargs):
-        serializer = self.get_serializer(data=request.data)
+        existing = DoctorProfile.objects.filter(id=request.user.id).first()
+        serializer = self.get_serializer(existing, data=request.data)
         serializer.is_valid(raise_exception=True)
         self.perform_create(serializer)
         return Response({'detail': 'Application submitted. Awaiting admin review.'}, status=201)         
