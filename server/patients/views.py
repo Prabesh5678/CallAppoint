@@ -1,4 +1,6 @@
+from django.db.models import Count
 from rest_framework import generics, permissions, status
+from rest_framework.views import APIView
 from rest_framework.response import Response
 from .models import PatientMedicalProfile, ClinicalDiagnosis, PatientBiomarker, GeneticVariant
 from .serializers import (
@@ -7,7 +9,7 @@ from .serializers import (
     PatientBiomarkerSerializer,
     GeneticVariantSerializer
 )
-from accounts.permissions import IsPatient, IsDoctor
+from accounts.permissions import IsPatient, IsDoctor, IsAdmin
 
 class MyMedicalProfileView(generics.RetrieveUpdateAPIView):
 # ... (existing view)
@@ -113,3 +115,51 @@ class GeneticVariantDetailView(generics.RetrieveUpdateDestroyAPIView):
         from appointments.models import Appointment
         patient_ids = Appointment.objects.filter(doctor_id=user.id).values_list('patient_id', flat=True)
         return GeneticVariant.objects.filter(patient_id__in=patient_ids)
+
+class PatientTrendView(APIView):
+    """Returns time-series data for a specific biomarker for a specific patient."""
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request, patient_id):
+        user = request.user.db_user
+        # Security: Only the patient or their doctor can see trends
+        if user.role == 'patient' and str(user.id) != str(patient_id):
+            return Response({"error": "Unauthorized"}, status=status.HTTP_403_FORBIDDEN)
+
+        biomarker_name = request.query_params.get('name')
+        if not biomarker_name:
+            return Response({"error": "Biomarker 'name' parameter required"}, status=status.HTTP_400_BAD_REQUEST)
+
+        data = PatientBiomarker.objects.filter(
+            patient_id=patient_id,
+            name__iexact=biomarker_name
+        ).order_by('recorded_at')
+
+        return Response({
+            "biomarker": biomarker_name,
+            "unit": data[0].unit if data.exists() else None,
+            "trends": [
+                {"date": d.recorded_at.date(), "value": d.value} for d in data
+            ]
+        })
+
+class ClinicalResearchAnalyticsView(APIView):
+    """Aggregated stats for medical research (Restricted to Admin/Verified Doctors)"""
+    permission_classes = [permissions.IsAuthenticated, IsAdmin | IsDoctor]
+
+    def get(self, request):
+        # 1. Distribution of Cancer Stages
+        stage_dist = ClinicalDiagnosis.objects.values('overall_stage').annotate(count=Count('id')).order_by('overall_stage')
+
+        # 2. Smoking Status in Population
+        smoking_stats = PatientMedicalProfile.objects.values('smoking_status').annotate(count=Count('id'))
+
+        # 3. Most Common Genetic Variants
+        top_genes = GeneticVariant.objects.values('gene_name').annotate(count=Count('id')).order_by('-count')[:10]
+
+        return Response({
+            "stage_distribution": stage_dist,
+            "lifestyle_smoking": smoking_stats,
+            "common_genetic_variants": top_genes,
+            "total_patients": PatientMedicalProfile.objects.count()
+        })
