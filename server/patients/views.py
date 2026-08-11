@@ -122,9 +122,18 @@ class PatientTrendView(APIView):
 
     def get(self, request, patient_id):
         user = request.user.db_user
-        # Security: Only the patient or their doctor can see trends
-        if user.role == 'patient' and str(user.id) != str(patient_id):
-            return Response({"error": "Unauthorized"}, status=status.HTTP_403_FORBIDDEN)
+
+        # Security Enhancement:
+        if user.role == 'patient':
+            if str(user.id) != str(patient_id):
+                return Response({"error": "Unauthorized"}, status=status.HTTP_403_FORBIDDEN)
+        elif user.role == 'doctor':
+            # Doctors only see trends for patients they have a professional relationship with
+            from appointments.models import Appointment
+            exists = Appointment.objects.filter(doctor_id=user.id, patient_id=patient_id).exists()
+            if not exists:
+                return Response({"error": "Access Denied: No professional relationship with this patient."},
+                                status=status.HTTP_403_FORBIDDEN)
 
         biomarker_name = request.query_params.get('name')
         if not biomarker_name:
@@ -135,9 +144,10 @@ class PatientTrendView(APIView):
             name__iexact=biomarker_name
         ).order_by('recorded_at')
 
+        first_entry = data.first()
         return Response({
             "biomarker": biomarker_name,
-            "unit": data[0].unit if data.exists() else None,
+            "unit": first_entry.unit if first_entry else None,
             "trends": [
                 {"date": d.recorded_at.date(), "value": d.value} for d in data
             ]
