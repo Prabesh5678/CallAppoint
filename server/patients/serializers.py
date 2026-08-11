@@ -27,3 +27,12 @@ class ClinicalDiagnosisSerializer(serializers.ModelSerializer):
             'histology', 'is_active', 'notes', 'created_at'
         ]
         read_only_fields = ['id', 'doctor', 'created_at']
+
+class PatientBiomarkerSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = PatientBiomarker
+        fields = [
+            'id', 'patient', 'name', 'value', 'unit',
+            'reference_range', 'recorded_at', 'notes', 'created_at'
+        ]
+        read_only_fields = ['id', 'created_at']

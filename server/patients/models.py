@@ -91,3 +91,30 @@ class ClinicalDiagnosis(models.Model):
 
     def __str__(self):
         return f"{self.condition_name} ({self.icd_code}) - {self.patient.full_name}"
+
+class PatientBiomarker(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    patient = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        db_column='patient_id',
+        related_name='biomarkers'
+    )
+
+    name = models.CharField(max_length=100, help_text="e.g., PSA, HER2, Glucose, Hemoglobin")
+    value = models.DecimalField(max_digits=10, decimal_places=3)
+    unit = models.CharField(max_length=50, help_text="e.g., ng/mL, mg/dL, g/L")
+
+    reference_range = models.CharField(max_length=100, null=True, blank=True, help_text="e.g., 0-4.0")
+    recorded_at = models.DateTimeField(help_text="When the lab sample was taken")
+
+    notes = models.TextField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        managed = False
+        db_table = 'patient_biomarkers'
+        ordering = ['-recorded_at']
+
+    def __str__(self):
+        return f"{self.name}: {self.value} {self.unit} ({self.patient.full_name})"

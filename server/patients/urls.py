@@ -8,4 +8,7 @@ urlpatterns = [
     # Diagnosis Engine
     path('diagnoses/', ClinicalDiagnosisListCreateView.as_view(), name='diagnosis-list-create'),
     path('diagnoses/<uuid:pk>/', ClinicalDiagnosisDetailView.as_view(), name='diagnosis-detail'),
+
+    # Biomarker Tracker
+    path('biomarkers/', BiomarkerListCreateView.as_view(), name='biomarker-list-create'),
 ]
