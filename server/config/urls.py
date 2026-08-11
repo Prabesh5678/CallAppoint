@@ -23,6 +23,7 @@ urlpatterns = [
     path('api/chat/', include('chat.urls')),
     path('api/payments/', include('payments.urls')),
     path('api/blogs/', include('blogs.urls')),
+    path('api/patients/', include('patients.urls')),
     path('api/admin-panel/', include('adminapi.urls')),
     path('api/artifacts/', include('artifacts.urls')),
 ]

@@ -43,6 +43,7 @@ INSTALLED_APPS = [
     'blogs',
     'adminapi',
     'artifacts',
+    'patients',
 ]
 
 TEMPLATES = [
