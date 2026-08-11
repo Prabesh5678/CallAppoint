@@ -11,4 +11,8 @@ urlpatterns = [
 
     # Biomarker Tracker
     path('biomarkers/', BiomarkerListCreateView.as_view(), name='biomarker-list-create'),
+
+    # Precision/Genomic Layer
+    path('genetics/', GeneticVariantListCreateView.as_view(), name='genetic-variant-list-create'),
+    path('genetics/<uuid:pk>/', GeneticVariantDetailView.as_view(), name='genetic-variant-detail'),
 ]

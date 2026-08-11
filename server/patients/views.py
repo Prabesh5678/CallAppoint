@@ -1,10 +1,11 @@
 from rest_framework import generics, permissions, status
 from rest_framework.response import Response
-from .models import PatientMedicalProfile, ClinicalDiagnosis, PatientBiomarker
+from .models import PatientMedicalProfile, ClinicalDiagnosis, PatientBiomarker, GeneticVariant
 from .serializers import (
     PatientMedicalProfileSerializer,
     ClinicalDiagnosisSerializer,
-    PatientBiomarkerSerializer
+    PatientBiomarkerSerializer,
+    GeneticVariantSerializer
 )
 from accounts.permissions import IsPatient, IsDoctor
 
@@ -71,3 +72,44 @@ class BiomarkerListCreateView(generics.ListCreateAPIView):
         else:
             # Doctors/Admins can record biomarkers for any patient (specified in request body)
             serializer.save()
+
+class GeneticVariantListCreateView(generics.ListCreateAPIView):
+    serializer_class = GeneticVariantSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        user = self.request.user.db_user
+        if user.role == 'patient':
+            return GeneticVariant.objects.filter(patient=user)
+
+        # Security Enhancement: Doctors only see variants for patients
+        # they have a professional relationship with (via appointments)
+        from appointments.models import Appointment
+        patient_ids = Appointment.objects.filter(doctor_id=user.id).values_list('patient_id', flat=True)
+        queryset = GeneticVariant.objects.filter(patient_id__in=patient_ids)
+
+        # Research Filtering
+        gene = self.request.query_params.get('gene')
+        significance = self.request.query_params.get('significance')
+        if gene:
+            queryset = queryset.filter(gene_name__iexact=gene)
+        if significance:
+            queryset = queryset.filter(clinical_significance=significance)
+
+        return queryset
+
+    def perform_create(self, serializer):
+        user = self.request.user.db_user
+        if user.role == 'patient':
+            raise permissions.PermissionDenied("Genetic data must be entered by a medical professional.")
+        serializer.save()
+
+class GeneticVariantDetailView(generics.RetrieveUpdateDestroyAPIView):
+    serializer_class = GeneticVariantSerializer
+    permission_classes = [permissions.IsAuthenticated, IsDoctor]
+
+    def get_queryset(self):
+        user = self.request.user.db_user
+        from appointments.models import Appointment
+        patient_ids = Appointment.objects.filter(doctor_id=user.id).values_list('patient_id', flat=True)
+        return GeneticVariant.objects.filter(patient_id__in=patient_ids)

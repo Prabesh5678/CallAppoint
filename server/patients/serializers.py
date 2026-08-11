@@ -36,3 +36,13 @@ class PatientBiomarkerSerializer(serializers.ModelSerializer):
             'reference_range', 'recorded_at', 'notes', 'created_at'
         ]
         read_only_fields = ['id', 'created_at']
+
+class GeneticVariantSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = GeneticVariant
+        fields = [
+            'id', 'patient', 'gene_name', 'variant_description',
+            'clinical_significance', 'test_date', 'testing_method',
+            'notes', 'created_at'
+        ]
+        read_only_fields = ['id', 'created_at']

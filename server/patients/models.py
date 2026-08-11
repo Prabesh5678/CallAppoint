@@ -118,3 +118,42 @@ class PatientBiomarker(models.Model):
 
     def __str__(self):
         return f"{self.name}: {self.value} {self.unit} ({self.patient.full_name})"
+
+class GeneticVariant(models.Model):
+    CLINICAL_SIGNIFICANCE_CHOICES = [
+        ('pathogenic', 'Pathogenic'),
+        ('likely_pathogenic', 'Likely Pathogenic'),
+        ('vus', 'Variant of Uncertain Significance (VUS)'),
+        ('likely_benign', 'Likely Benign'),
+        ('benign', 'Benign'),
+    ]
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    patient = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        db_column='patient_id',
+        related_name='genetic_variants'
+    )
+
+    gene_name = models.CharField(max_length=50, help_text="e.g., BRCA1, EGFR, TP53")
+    variant_description = models.CharField(max_length=255, help_text="e.g., c.5266dupC, p.Glu23Val")
+
+    clinical_significance = models.CharField(
+        max_length=30,
+        choices=CLINICAL_SIGNIFICANCE_CHOICES,
+        default='vus'
+    )
+
+    test_date = models.DateField(null=True, blank=True)
+    testing_method = models.CharField(max_length=100, null=True, blank=True, help_text="e.g., NGS, PCR")
+
+    notes = models.TextField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        managed = False
+        db_table = 'genetic_variants'
+
+    def __str__(self):
+        return f"{self.gene_name} {self.variant_description} - {self.patient.full_name}"
