@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import PatientMedicalProfile
+from .models import PatientMedicalProfile, ClinicalDiagnosis, PatientBiomarker, GeneticVariant
 
 class PatientMedicalProfileSerializer(serializers.ModelSerializer):
     full_name = serializers.CharField(source='id.full_name', read_only=True)
