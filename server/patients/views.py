@@ -2,6 +2,9 @@ from django.db.models import Count
 from rest_framework import generics, permissions, status
 from rest_framework.views import APIView
 from rest_framework.response import Response
+import json
+import os
+from django.conf import settings
 from .models import PatientMedicalProfile, ClinicalDiagnosis, PatientBiomarker, GeneticVariant
 from .serializers import (
     PatientMedicalProfileSerializer,
@@ -10,6 +13,32 @@ from .serializers import (
     GeneticVariantSerializer
 )
 from accounts.permissions import IsPatient, IsDoctor, IsAdmin
+
+class ICD10SearchView(APIView):
+    """
+    Search for ICD-10 codes for oncology.
+    Returns a list of matching codes and names.
+    """
+    permission_classes = [permissions.IsAuthenticated, IsDoctor]
+
+    def get(self, request):
+        query = request.query_params.get('q', '').lower()
+        file_path = os.path.join(settings.BASE_DIR, 'patients', 'data', 'icd10_cancer.json')
+
+        try:
+            with open(file_path, 'r') as f:
+                data = json.load(f)
+        except Exception:
+            return Response({"error": "ICD data not found"}, status=500)
+
+        if not query:
+            return Response(data[:10]) # Return first 10 by default
+
+        results = [
+            item for item in data
+            if query in item['code'].lower() or query in item['name'].lower()
+        ]
+        return Response(results[:20])
 
 class MyMedicalProfileView(generics.RetrieveUpdateAPIView):
 # ... (existing view)
@@ -116,15 +145,59 @@ class GeneticVariantDetailView(generics.RetrieveUpdateDestroyAPIView):
         patient_ids = Appointment.objects.filter(doctor_id=user.id).values_list('patient_id', flat=True)
         return GeneticVariant.objects.filter(patient_id__in=patient_ids)
 
+from django.core.cache import cache
+from .tasks import precompute_patient_dashboard_data
+
+class PatientDashboardView(APIView):
+    """
+    Consolidated dashboard for the mobile app.
+    Uses cached precomputed data from background jobs to keep the app fast.
+    """
+    permission_classes = [permissions.IsAuthenticated, IsPatient]
+
+    def get(self, request):
+        patient_id = request.user.id
+        cache_key = f"patient_dashboard_{patient_id}"
+        dashboard_data = cache.get(cache_key)
+
+        if not dashboard_data:
+            # If cache is empty, trigger a background job to compute it for next time
+            # and return live data once for this request.
+            precompute_patient_dashboard_data.delay(patient_id)
+
+            # (Fall back to live computation if cache miss)
+            latest_diag = ClinicalDiagnosis.objects.filter(patient_id=patient_id).order_by('-date_of_diagnosis').first()
+            diag_serializer = ClinicalDiagnosisSerializer(latest_diag) if latest_diag else None
+
+            profile = PatientMedicalProfile.objects.filter(id=patient_id).first()
+            profile_serializer = PatientMedicalProfileSerializer(profile) if profile else None
+
+            dashboard_data = {
+                "medical_profile": profile_serializer.data if profile_serializer else None,
+                "latest_diagnosis": diag_serializer.data if diag_serializer else None,
+                "is_live": True # Flag for UI to show data is being refreshed in background
+            }
+
+        return Response(dashboard_data)
+
 class PatientTrendView(APIView):
     """Returns time-series data for a specific biomarker for a specific patient."""
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request, patient_id):
         user = request.user.db_user
-        # Security: Only the patient or their doctor can see trends
-        if user.role == 'patient' and str(user.id) != str(patient_id):
-            return Response({"error": "Unauthorized"}, status=status.HTTP_403_FORBIDDEN)
+
+        # Security Enhancement:
+        if user.role == 'patient':
+            if str(user.id) != str(patient_id):
+                return Response({"error": "Unauthorized"}, status=status.HTTP_403_FORBIDDEN)
+        elif user.role == 'doctor':
+            # Doctors only see trends for patients they have a professional relationship with
+            from appointments.models import Appointment
+            exists = Appointment.objects.filter(doctor_id=user.id, patient_id=patient_id).exists()
+            if not exists:
+                return Response({"error": "Access Denied: No professional relationship with this patient."},
+                                status=status.HTTP_403_FORBIDDEN)
 
         biomarker_name = request.query_params.get('name')
         if not biomarker_name:
@@ -135,9 +208,10 @@ class PatientTrendView(APIView):
             name__iexact=biomarker_name
         ).order_by('recorded_at')
 
+        first_entry = data.first()
         return Response({
             "biomarker": biomarker_name,
-            "unit": data[0].unit if data.exists() else None,
+            "unit": first_entry.unit if first_entry else None,
             "trends": [
                 {"date": d.recorded_at.date(), "value": d.value} for d in data
             ]

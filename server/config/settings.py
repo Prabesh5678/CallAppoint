@@ -44,6 +44,7 @@ INSTALLED_APPS = [
     'adminapi',
     'artifacts',
     'patients',
+    'django_celery_results',
 ]
 
 TEMPLATES = [
@@ -164,3 +165,11 @@ COTURN_SECRET = config('COTURN_SECRET', default='')
 PUBLIC_IP = config('PUBLIC_IP', default='20.2.129.98')
 
 FIREBASE_CREDENTIALS_PATH = config('FIREBASE_CREDENTIALS_PATH', default='secrets/firebase-service-account.json')
+
+# Celery Configuration
+CELERY_BROKER_URL = REDIS_URL if REDIS_URL else 'redis://localhost:6379/0'
+CELERY_RESULT_BACKEND = 'django-db'
+CELERY_ACCEPT_CONTENT = ['json']
+CELERY_TASK_SERIALIZER = 'json'
+CELERY_RESULT_SERIALIZER = 'json'
+CELERY_TIMEZONE = TIME_ZONE

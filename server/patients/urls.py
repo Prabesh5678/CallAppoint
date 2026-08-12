@@ -8,7 +8,9 @@ from .views import (
     GeneticVariantListCreateView,
     GeneticVariantDetailView,
     PatientTrendView,
-    ClinicalResearchAnalyticsView
+    ClinicalResearchAnalyticsView,
+    PatientDashboardView,
+    ICD10SearchView
 )
 
 urlpatterns = [
@@ -22,6 +24,12 @@ urlpatterns = [
     # Biomarker Tracker
     path('biomarkers/', BiomarkerListCreateView.as_view(), name='biomarker-list-create'),
     path('trends/<uuid:patient_id>/', PatientTrendView.as_view(), name='patient-trend'),
+
+    # Mobile Dashboard (Async/Cached)
+    path('dashboard/', PatientDashboardView.as_view(), name='patient-dashboard'),
+
+    # ICD-10 Search for Doctors
+    path('icd10-search/', ICD10SearchView.as_view(), name='icd10-search'),
 
     # Precision/Genomic Layer
     path('genetics/', GeneticVariantListCreateView.as_view(), name='genetic-variant-list-create'),
