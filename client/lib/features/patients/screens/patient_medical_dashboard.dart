@@ -74,7 +74,7 @@ class PatientMedicalDashboard extends ConsumerWidget {
                     );
                   }),
                   const SizedBox(height: 12),
-                  _buildRecentResultsList(context, data.biomarkerSummaries),
+                  _buildRecentResultsList(context, ref, data.biomarkerSummaries),
                 ],
                 const SizedBox(height: 24),
 
@@ -248,7 +248,7 @@ class PatientMedicalDashboard extends ConsumerWidget {
 
   String _capitalize(String s) => s.isEmpty ? '' : '${s[0].toUpperCase()}${s.substring(1)}';
 
-  Widget _buildRecentResultsList(BuildContext context, Map<String, List<dynamic>> summaries) {
+  Widget _buildRecentResultsList(BuildContext context, WidgetRef ref, Map<String, List<dynamic>> summaries) {
     // Flatten and sort by date
     final allResults = <Map<String, dynamic>>[];
     summaries.forEach((name, list) {

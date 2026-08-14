@@ -131,7 +131,7 @@ class _AboutScreenState extends State<AboutScreen> {
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     Padding(
-                                      padding: const EdgeInsets.top(6.0),
+                                      padding: const EdgeInsets.only(top: 6.0),
                                       child: Icon(
                                         Icons.circle,
                                         size: 8,
