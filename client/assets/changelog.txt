@@ -1,3 +1,3 @@
-- Improved doctor application flow with re-application support, fixed Admin Dashboard layout crashes, and added an approval confirmation dialog.
-- Integrated 3D Anatomy Explorer using a high-performance WebGL portal, enabling interactive organ visualization across blogs and a new Education tab.
-- Added Django backend support for anatomy metadata and implemented a responsive 3D viewer with dynamic deep-linking for medical education.
+- Clinical Research: Launched oncology models with ICD-10/TNM staging and genetic tracking.
+- Health Dashboard: Interactive trends with longitudinal charts and lab result management.
+- Performance: Redis-ready caching with fail-safe live fallback for fast data loading.

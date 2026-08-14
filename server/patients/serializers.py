@@ -36,6 +36,9 @@ class PatientBiomarkerSerializer(serializers.ModelSerializer):
             'reference_range', 'recorded_at', 'notes', 'created_at'
         ]
         read_only_fields = ['id', 'created_at']
+        extra_kwargs = {
+            'patient': {'required': False}
+        }
 
 class GeneticVariantSerializer(serializers.ModelSerializer):
     class Meta:

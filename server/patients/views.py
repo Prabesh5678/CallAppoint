@@ -52,10 +52,15 @@ class MyMedicalProfileView(generics.RetrieveUpdateAPIView):
 
 class PatientMedicalProfileDetailView(generics.RetrieveAPIView):
     """View for Doctors to see a specific patient's profile"""
-    queryset = PatientMedicalProfile.objects.all()
     serializer_class = PatientMedicalProfileSerializer
     permission_classes = [permissions.IsAuthenticated, IsDoctor]
     lookup_field = 'id'
+
+    def get_queryset(self):
+        user = self.request.user.db_user
+        from appointments.models import Appointment
+        patient_ids = Appointment.objects.filter(doctor_id=user.id).values_list('patient_id', flat=True)
+        return PatientMedicalProfile.objects.filter(id__in=patient_ids)
 
 class ClinicalDiagnosisListCreateView(generics.ListCreateAPIView):
     serializer_class = ClinicalDiagnosisSerializer
@@ -65,7 +70,12 @@ class ClinicalDiagnosisListCreateView(generics.ListCreateAPIView):
         user = self.request.user.db_user
         if user.role == 'patient':
             return ClinicalDiagnosis.objects.filter(patient=user)
-        return ClinicalDiagnosis.objects.all()
+
+        # Security Enhancement: Doctors only see diagnoses for patients
+        # they have a professional relationship with
+        from appointments.models import Appointment
+        patient_ids = Appointment.objects.filter(doctor_id=user.id).values_list('patient_id', flat=True)
+        return ClinicalDiagnosis.objects.filter(patient_id__in=patient_ids)
 
     def perform_create(self, serializer):
         # Automatically set the doctor as the one creating the diagnosis
@@ -74,19 +84,35 @@ class ClinicalDiagnosisListCreateView(generics.ListCreateAPIView):
 class ClinicalDiagnosisDetailView(generics.RetrieveUpdateDestroyAPIView):
     serializer_class = ClinicalDiagnosisSerializer
     permission_classes = [permissions.IsAuthenticated, IsDoctor]
-    queryset = ClinicalDiagnosis.objects.all()
+
+    def get_queryset(self):
+        user = self.request.user.db_user
+        from appointments.models import Appointment
+        patient_ids = Appointment.objects.filter(doctor_id=user.id).values_list('patient_id', flat=True)
+        return ClinicalDiagnosis.objects.filter(patient_id__in=patient_ids)
 
 class BiomarkerListCreateView(generics.ListCreateAPIView):
     serializer_class = PatientBiomarkerSerializer
     permission_classes = [permissions.IsAuthenticated]
 
+    def post(self, request, *args, **kwargs):
+        # Temporary Debugging for 400 Errors
+        serializer = self.get_serializer(data=request.data)
+        if not serializer.is_valid():
+            print(f"DEBUG - Biomarker Validation Errors: {serializer.errors}")
+        return super().post(request, *args, **kwargs)
+
     def get_queryset(self):
         user = self.request.user.db_user
         queryset = PatientBiomarker.objects.all()
 
-        # Patients only see their own biomarkers
+        # Security Enhancement:
         if user.role == 'patient':
             queryset = queryset.filter(patient=user)
+        elif user.role == 'doctor':
+            from appointments.models import Appointment
+            patient_ids = Appointment.objects.filter(doctor_id=user.id).values_list('patient_id', flat=True)
+            queryset = queryset.filter(patient_id__in=patient_ids)
 
         # Support filtering by biomarker name (e.g., ?name=PSA) for charts
         name = self.request.query_params.get('name')
@@ -103,6 +129,20 @@ class BiomarkerListCreateView(generics.ListCreateAPIView):
         else:
             # Doctors/Admins can record biomarkers for any patient (specified in request body)
             serializer.save()
+
+class BiomarkerDetailView(generics.RetrieveUpdateDestroyAPIView):
+    serializer_class = PatientBiomarkerSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        user = self.request.user.db_user
+        if user.role == 'patient':
+            return PatientBiomarker.objects.filter(patient=user)
+        elif user.role == 'doctor':
+            from appointments.models import Appointment
+            patient_ids = Appointment.objects.filter(doctor_id=user.id).values_list('patient_id', flat=True)
+            return PatientBiomarker.objects.filter(patient_id__in=patient_ids)
+        return PatientBiomarker.objects.all()
 
 class GeneticVariantListCreateView(generics.ListCreateAPIView):
     serializer_class = GeneticVariantSerializer
@@ -156,27 +196,61 @@ class PatientDashboardView(APIView):
     permission_classes = [permissions.IsAuthenticated, IsPatient]
 
     def get(self, request):
-        patient_id = request.user.id
+        patient_id = request.user.db_user.id
         cache_key = f"patient_dashboard_{patient_id}"
-        dashboard_data = cache.get(cache_key)
+
+        # 1. Try to get from Cache
+        dashboard_data = None
+        try:
+            dashboard_data = cache.get(cache_key)
+        except Exception:
+            # Redis is likely down, ignore and move to live computation
+            pass
 
         if not dashboard_data:
-            # If cache is empty, trigger a background job to compute it for next time
-            # and return live data once for this request.
-            precompute_patient_dashboard_data.delay(patient_id)
+            # 2. Try to trigger background refresh
+            is_refreshing = False
+            try:
+                precompute_patient_dashboard_data.delay(patient_id)
+                is_refreshing = True
+            except Exception:
+                pass
 
-            # (Fall back to live computation if cache miss)
-            latest_diag = ClinicalDiagnosis.objects.filter(patient_id=patient_id).order_by('-date_of_diagnosis').first()
-            diag_serializer = ClinicalDiagnosisSerializer(latest_diag) if latest_diag else None
+            # 3. Fall back to live computation (Safety Wrapped)
+            try:
+                latest_diag = ClinicalDiagnosis.objects.filter(patient_id=patient_id).order_by('-date_of_diagnosis').first()
+                diag_serializer = ClinicalDiagnosisSerializer(latest_diag) if latest_diag else None
 
-            profile = PatientMedicalProfile.objects.filter(id=patient_id).first()
-            profile_serializer = PatientMedicalProfileSerializer(profile) if profile else None
+                profile = PatientMedicalProfile.objects.filter(id=patient_id).first()
+                profile_serializer = PatientMedicalProfileSerializer(profile) if profile else None
 
-            dashboard_data = {
-                "medical_profile": profile_serializer.data if profile_serializer else None,
-                "latest_diagnosis": diag_serializer.data if diag_serializer else None,
-                "is_live": True # Flag for UI to show data is being refreshed in background
-            }
+                biomarkers = PatientBiomarker.objects.filter(patient_id=patient_id).order_by('name', '-recorded_at')
+                trends = {}
+                for b in biomarkers:
+                    if b.name not in trends:
+                        trends[b.name] = []
+                    if len(trends[b.name]) < 5:
+                        trends[b.name].append({
+                            "id": str(b.id),
+                            "value": float(b.value),
+                            "unit": b.unit,
+                            "date": b.recorded_at.isoformat()
+                        })
+
+                dashboard_data = {
+                    "medical_profile": profile_serializer.data if profile_serializer else None,
+                    "latest_diagnosis": diag_serializer.data if diag_serializer else None,
+                    "biomarker_summaries": trends,
+                    "is_live": is_refreshing
+                }
+            except Exception as e:
+                # If database tables are missing, return empty but valid structure to prevent app crash
+                dashboard_data = {
+                    "medical_profile": None,
+                    "latest_diagnosis": None,
+                    "biomarker_summaries": {},
+                    "error": "Clinical tables not yet initialized"
+                }
 
         return Response(dashboard_data)
 

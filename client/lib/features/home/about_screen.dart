@@ -99,29 +99,58 @@ class _AboutScreenState extends State<AboutScreen> {
             ),
             const SizedBox(height: 16),
             Container(
+              constraints: const BoxConstraints(maxWidth: 600), // Better for Web
               width: double.infinity,
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.all(20),
               decoration: BoxDecoration(
                 color: Theme.of(context).brightness == Brightness.dark
                     ? Colors.grey[900]
-                    : Colors.grey[100],
-                borderRadius: BorderRadius.circular(12),
+                    : Colors.white,
+                borderRadius: BorderRadius.circular(16),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.05),
+                    blurRadius: 10,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
                 border: Border.all(
-                  color: Theme.of(context).brightness == Brightness.dark
-                      ? Colors.grey[800]!
-                      : Colors.grey[300]!,
+                  color: Theme.of(context).dividerColor.withOpacity(0.1),
                 ),
               ),
               child: _isLoading
                   ? const Center(child: CircularProgressIndicator())
-                  : Text(
-                      _changelog,
-                      style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                            fontFamily: 'monospace',
-                            color: Theme.of(context).brightness == Brightness.dark
-                                ? Colors.grey[300]
-                                : Colors.black87,
-                          ),
+                  : Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: _changelog
+                          .split('\n')
+                          .where((line) => line.trim().isNotEmpty)
+                          .map((line) => Padding(
+                                padding: const EdgeInsets.only(bottom: 12.0),
+                                child: Row(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Padding(
+                                      padding: const EdgeInsets.top(6.0),
+                                      child: Icon(
+                                        Icons.circle,
+                                        size: 8,
+                                        color: Theme.of(context).primaryColor,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 12),
+                                    Expanded(
+                                      child: Text(
+                                        line.replaceFirst('- ', '').trim(),
+                                        style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                                              height: 1.4,
+                                            ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ))
+                          .toList(),
                     ),
             ),
             const SizedBox(height: 40),

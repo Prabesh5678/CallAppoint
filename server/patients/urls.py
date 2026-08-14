@@ -5,6 +5,7 @@ from .views import (
     ClinicalDiagnosisListCreateView,
     ClinicalDiagnosisDetailView,
     BiomarkerListCreateView,
+    BiomarkerDetailView,
     GeneticVariantListCreateView,
     GeneticVariantDetailView,
     PatientTrendView,
@@ -23,6 +24,7 @@ urlpatterns = [
 
     # Biomarker Tracker
     path('biomarkers/', BiomarkerListCreateView.as_view(), name='biomarker-list-create'),
+    path('biomarkers/<uuid:pk>/', BiomarkerDetailView.as_view(), name='biomarker-detail'),
     path('trends/<uuid:patient_id>/', PatientTrendView.as_view(), name='patient-trend'),
 
     # Mobile Dashboard (Async/Cached)

@@ -18,6 +18,7 @@ import '../features/blogs/screens/blog_list_screen.dart';
 import '../features/blogs/screens/blog_detail_screen.dart';
 import '../features/blogs/screens/edit_blog_screen.dart';
 import '../features/appointments/screens/artifact_list_screen.dart';
+import '../features/patients/screens/patient_medical_dashboard.dart';
 import '../admin_app/admin_login_screen.dart';
 import 'supabase_client.dart';
 
@@ -107,6 +108,10 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/artifacts',
         builder: (context, state) => const ArtifactListScreen(),
+      ),
+      GoRoute(
+        path: '/medical-dashboard',
+        builder: (context, state) => const PatientMedicalDashboard(),
       ),
       GoRoute(
         path: '/secret-admin',

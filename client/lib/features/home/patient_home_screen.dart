@@ -11,6 +11,7 @@ import '../appointments/providers/appointment_provider.dart';
 import '../appointments/models/appointment.dart';
 import '../notifications/providers/notification_provider.dart';
 import '../blogs/screens/blog_list_screen.dart';
+import '../patients/screens/patient_medical_dashboard.dart';
 import 'education_screen.dart';
 
 class PatientHomeScreen extends ConsumerStatefulWidget {
@@ -74,6 +75,11 @@ class _PatientHomeScreenState extends ConsumerState<PatientHomeScreen> {
         selectedIcon: Icon(Icons.school),
         label: 'Education',
       ),
+      const NavigationDestinationItem(
+        icon: Icon(Icons.favorite_border),
+        selectedIcon: Icon(Icons.favorite),
+        label: 'Health',
+      ),
     ];
 
     return ResponsiveScaffold(
@@ -91,7 +97,9 @@ class _PatientHomeScreenState extends ConsumerState<PatientHomeScreen> {
               ? 'My Appointments'
               : _tabIndex == 2
                   ? 'Health Blogs'
-                  : 'Medical Education'),
+                  : _tabIndex == 3
+                      ? 'Medical Education'
+                      : 'My Health Journey'),
       actions: [
         if (_tabIndex == 0 || _tabIndex == 1)
           IconButton(
@@ -113,6 +121,7 @@ class _PatientHomeScreenState extends ConsumerState<PatientHomeScreen> {
           _MyAppointmentsTab(),
           BlogListScreen(),
           EducationScreen(),
+          const PatientMedicalDashboard(),
         ],
       ),
     );
